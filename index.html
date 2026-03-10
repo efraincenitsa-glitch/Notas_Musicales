@@ -1,0 +1,266 @@
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Piano IA Detector</title>
+
+<link rel="apple-touch-icon" href="icono.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+
+<script src="https://cdn.jsdelivr.net/npm/tonal/browser/tonal.min.js"></script>
+
+<style>
+body{
+font-family:Arial;
+background:#0f172a;
+color:white;
+text-align:center;
+}
+#nota{
+font-size:60px;
+color:#22c55e;
+}
+#acorde{
+font-size:35px;
+color:#facc15;
+}
+#piano{
+display:flex;
+overflow-x:auto;
+padding:20px;
+}
+.tecla{
+width:28px;
+height:140px;
+background:white;
+border:1px solid black;
+}
+.tecla.activa{
+background:#22c55e;
+}
+#lista{
+margin-top:20px;
+background:#1e293b;
+padding:10px;
+border-radius:8px;
+max-width:400px;
+margin-left:auto;
+margin-right:auto;
+text-align:left;
+}
+button{
+padding:12px 20px;
+font-size:18px;
+border-radius:8px;
+border:none;
+margin-top:10px;
+}
+</style>
+</head>
+
+<body>
+
+<h2>🎹 Piano IA Detector</h2>
+
+<button onclick="iniciar()">Activar micrófono</button>
+
+<div id="nota">---</div>
+<div id="acorde">Acorde: ---</div>
+
+<div id="piano"></div>
+
+<h3>Notas detectadas</h3>
+<div id="lista"></div>
+
+<script>
+
+const piano=document.getElementById("piano");
+
+const notasBase=[
+"C","C#","D","D#","E","F",
+"F#","G","G#","A","A#","B"
+];
+
+let teclas=[];
+
+function crearPiano(){
+
+for(let i=0;i<88;i++){
+
+let tecla=document.createElement("div");
+
+tecla.className="tecla";
+
+piano.appendChild(tecla);
+
+teclas.push(tecla);
+
+}
+
+}
+
+crearPiano();
+
+let audioContext;
+let analyser;
+
+let historial=[];
+let secuencia=[];
+
+async function iniciar(){
+
+audioContext=new AudioContext();
+
+let stream=await navigator.mediaDevices.getUserMedia({audio:true});
+
+let mic=audioContext.createMediaStreamSource(stream);
+
+analyser=audioContext.createAnalyser();
+
+mic.connect(analyser);
+
+detectar();
+
+}
+
+function detectar(){
+
+let buffer=new Float32Array(analyser.fftSize);
+
+analyser.getFloatTimeDomainData(buffer);
+
+let freq=autoCorrelate(buffer,audioContext.sampleRate);
+
+if(freq!=-1){
+
+let nota=frecuenciaANota(freq);
+
+mostrarNota(nota);
+
+}
+
+requestAnimationFrame(detectar);
+
+}
+
+function frecuenciaANota(freq){
+
+let A4=440;
+
+let n=12*Math.log2(freq/A4);
+
+let index=Math.round(n)+57;
+
+let nota=notasBase[(index%12+12)%12];
+
+return nota;
+
+}
+
+function mostrarNota(nota){
+
+document.getElementById("nota").innerText=nota;
+
+historial.push(nota);
+
+if(historial.length>5) historial.shift();
+
+detectarAcorde();
+
+if(secuencia[secuencia.length-1]!=nota){
+
+secuencia.push(nota);
+
+actualizarLista();
+
+}
+
+}
+
+function detectarAcorde(){
+
+let acorde=Tonal.Chord.detect(historial);
+
+document.getElementById("acorde").innerText="Acorde: "+(acorde[0]||"...");
+
+}
+
+function actualizarLista(){
+
+let lista=document.getElementById("lista");
+
+lista.innerHTML="";
+
+secuencia.forEach((n,i)=>{
+
+let item=document.createElement("div");
+
+item.innerText=(i+1)+". "+n;
+
+lista.appendChild(item);
+
+});
+
+}
+
+function autoCorrelate(buf,sampleRate){
+
+let SIZE=buf.length;
+
+let rms=0;
+
+for(let i=0;i<SIZE;i++){
+let val=buf[i];
+rms+=val*val;
+}
+
+rms=Math.sqrt(rms/SIZE);
+
+if(rms<0.01) return -1;
+
+let r1=0,r2=SIZE-1;
+
+for(let i=0;i<SIZE/2;i++){
+if(Math.abs(buf[i])<0.2){r1=i;break;}
+}
+
+for(let i=1;i<SIZE/2;i++){
+if(Math.abs(buf[SIZE-i])<0.2){r2=SIZE-i;break;}
+}
+
+buf=buf.slice(r1,r2);
+SIZE=buf.length;
+
+let c=new Array(SIZE).fill(0);
+
+for(let i=0;i<SIZE;i++){
+for(let j=0;j<SIZE-i;j++){
+c[i]+=buf[j]*buf[j+i];
+}
+}
+
+let d=0;
+while(c[d]>c[d+1]) d++;
+
+let maxval=-1;
+let maxpos=-1;
+
+for(let i=d;i<SIZE;i++){
+if(c[i]>maxval){
+maxval=c[i];
+maxpos=i;
+}
+}
+
+let T0=maxpos;
+
+return sampleRate/T0;
+
+}
+
+</script>
+
+</body>
+</html>
