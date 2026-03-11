@@ -124,7 +124,7 @@ function intervalBetween(from, to){
   try{
     const i = Tonal?.Distance?.interval?.(from, to) || Tonal?.Interval?.distance?.(from, to);
     if(i) return i;
-  }catch(e){/* continua con fallback */}
+  }catch(e){/* fallback */}
   // Fallback por semitonos (intervalo simple ascendente)
   const a = pitchClassIndex(from), b = pitchClassIndex(to);
   if(a < 0 || b < 0) return "?";
@@ -212,19 +212,24 @@ function loopDeteccion(){
 }
 
 function onStableNote(nota){
+  // Muestra nota del frame estabilizado
   $("#notaActual").textContent = nota;
 
+  // 1) contabiliza para hallar la principal
   conteoNotas[nota] = (conteoNotas[nota] || 0) + 1;
+
+  // 2) acumula para resumen único
   setUnicas.add(nota);
 
+  // 3) actualiza vistas
   renderResumen();
-  actualizarAnalisis();
+  actualizarAnalisis();   // <— aquí se pinta la “Nota principal”
 }
 
 function frecuenciaANota(freq){
   const A4 = 440;
   const n = 12 * Math.log2(freq / A4);
-  const index = Math.round(n) + 57; // A4 = índice 57 cuando C=0..B=11
+  const index = Math.round(n) + 57; // A4 = índice 57 (C=0..B=11)
   const pc = PC_SHARP[(index % 12 + 12) % 12];
   return pc; // sin octava
 }
@@ -251,12 +256,13 @@ function renderResumen(){
 
 function actualizarAnalisis(){
   const principal = obtenerNotaPrincipal();
+  // ——— AQUÍ SE ESCRIBE LA NOTA PRINCIPAL ———
   $("#notaPrincipal").textContent = principal || "—";
 
   // Intervalos desde la principal hacia las demás notas únicas
   if(principal){
     const otros = Array.from(setUnicas).filter(n => n !== principal);
-    // Ordena por cercanía (semitonos ascendentes)
+    // Orden por cercanía (semitonos ascendentes)
     otros.sort((a,b)=>{
       const da = (pitchClassIndex(a) - pitchClassIndex(principal) + 12) % 12;
       const db = (pitchClassIndex(b) - pitchClassIndex(principal) + 12) % 12;
@@ -279,7 +285,7 @@ function actualizarAnalisis(){
 }
 
 function obtenerNotaPrincipal(){
-  // La más frecuente; si hay empate, la que apareció primero en el resumen
+  // Devuelve la nota con mayor conteo (frecuencia de aparición)
   let mejor = null, max = -1;
   for(const n of Object.keys(conteoNotas)){
     const c = conteoNotas[n] || 0;
