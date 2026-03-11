@@ -69,7 +69,7 @@
   </div>
 
   <div id="analisis">
-    <h3>Análisis musical</h3>
+    <h3>Ánalisis musical</h3>
     <div class="fila"><div class="label">Nota principal:</div><div class="valor" id="notaPrincipal">—</div></div>
     <div class="fila"><div class="label">Intervalos (desde la principal):</div><div class="valor" id="intervalos">—</div></div>
     <div class="fila"><div class="label">Acordes sugeridos:</div><div class="valor" id="acordes">—</div></div>
@@ -80,12 +80,24 @@
 const PC_SHARP = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
 const SHARP_TO_FLAT = { "C#":"Db","D#":"Eb","F#":"Gb","G#":"Ab","A#":"Bb" };
 const FLAT_TO_SHARP  = { "Db":"C#", "Eb":"D#", "Gb":"F#", "Ab":"G#", "Bb":"A#" };
+
+// Nombres en español
+const NOMBRE_ES_BASE = { "C":"Do", "D":"Re", "E":"Mi", "F":"Fa", "G":"Sol", "A":"La", "B":"Si" };
+const NOMBRE_ES_SHARP = {           // preferencia de ♯
+  "C":"Do",  "C#":"Do♯", "D":"Re",  "D#":"Re♯", "E":"Mi",
+  "F":"Fa",  "F#":"Fa♯", "G":"Sol", "G#":"Sol♯","A":"La","A#":"La♯","B":"Si"
+};
+const NOMBRE_ES_FLAT = {            // preferencia de ♭
+  "C":"Do",  "Db":"Re♭", "D":"Re",  "Eb":"Mi♭", "E":"Mi",
+  "F":"Fa",  "Gb":"Sol♭","G":"Sol", "Ab":"La♭","A":"La","Bb":"Si♭","B":"Si"
+};
+
 const SEMI_TO_INTERVAL = {
   0:"1P", 1:"2m", 2:"2M", 3:"3m", 4:"3M", 5:"4P",
   6:"TT", 7:"5P", 8:"6m", 9:"6M", 10:"7m", 11:"7M"
 };
-const MAX_RESUMEN = 7;            // cuántas notas únicas mostrar como "chips"
-const MIN_HOLD_FRAMES = 3;        // frames repetidos para aceptar un cambio de nota (suavizado)
+const MAX_RESUMEN = 7;
+const MIN_HOLD_FRAMES = 3;
 
 /* ========================= Estado ========================= */
 let audioContext = null;
@@ -93,11 +105,11 @@ let analyser = null;
 let micStream = null;
 let rafId = null;
 
-const conteoNotas = {};           // { C: 12, D: 3, ... }
-const setUnicas = new Set();      // notas únicas acumuladas (según formato actual)
-let lastFrameNote = null;         // última nota cruda de un frame
-let holdFrames = 0;               // frames consecutivos con la misma nota
-let notaActual = null;            // última nota aceptada (ya estabilizada)
+const conteoNotas = {};           // { C: 12, D: 3, ... }  *clases de tono en ♯*
+const setUnicas = new Set();      // idem
+let lastFrameNote = null;
+let holdFrames = 0;
+let notaActual = null;
 
 /* ========================= Utilidades ========================= */
 const $ = s => document.querySelector(s);
@@ -111,7 +123,21 @@ function toFlat(n){ return SHARP_TO_FLAT[n] || n; }
 function formatByInstrument(nota){
   const inst = $instrumento.value;    // guitarra | bajo | piano
   if(inst === "piano") return toFlat(nota);
-  return toSharp(nota);               // guitarra y bajo en ♯
+  return toSharp(nota);
+}
+
+// ► Conversión a nombre en español según instrumento
+function toNombreES(notaPC){
+  const inst = $instrumento.value;
+  if(inst === "piano"){
+    // En piano preferimos bemoles
+    const flat = toFlat(notaPC);
+    return NOMBRE_ES_FLAT[flat] || NOMBRE_ES_SHARP[notaPC] || notaPC;
+  }else{
+    // Guitarra/Bajo preferimos sostenidos
+    const sharp = toSharp(notaPC);
+    return NOMBRE_ES_SHARP[sharp] || NOMBRE_ES_FLAT[notaPC] || notaPC;
+  }
 }
 
 function pitchClassIndex(nota){  // usa versión ♯ para indexar
@@ -120,12 +146,10 @@ function pitchClassIndex(nota){  // usa versión ♯ para indexar
 }
 
 function intervalBetween(from, to){
-  // Intento con Tonal si está disponible
   try{
     const i = Tonal?.Distance?.interval?.(from, to) || Tonal?.Interval?.distance?.(from, to);
     if(i) return i;
-  }catch(e){/* fallback */}
-  // Fallback por semitonos (intervalo simple ascendente)
+  }catch(e){}
   const a = pitchClassIndex(from), b = pitchClassIndex(to);
   if(a < 0 || b < 0) return "?";
   const semi = (b - a + 12) % 12;
@@ -195,8 +219,7 @@ function loopDeteccion(){
   const freq = autoCorrelate(buffer, audioContext.sampleRate);
   if(freq !== -1 && Number.isFinite(freq)){
     const base = frecuenciaANota(freq);         // C, C#, D...
-    const nFmt = formatByInstrument(base);      // según instrumento
-    // Suavizado: exige MIN_HOLD_FRAMES frames iguales antes de aceptar
+    const nFmt = formatByInstrument(base);      // según instrumento (sigue siendo PC)
     if(lastFrameNote === nFmt){
       holdFrames++;
     }else{
@@ -211,25 +234,23 @@ function loopDeteccion(){
   rafId = requestAnimationFrame(loopDeteccion);
 }
 
-function onStableNote(nota){
-  // Muestra nota del frame estabilizado
-  $("#notaActual").textContent = nota;
+function onStableNote(notaPC){
+  // Mostrar nombre español
+  $("#notaActual").textContent = toNombreES(notaPC);
 
-  // 1) contabiliza para hallar la principal
-  conteoNotas[nota] = (conteoNotas[nota] || 0) + 1;
+  // Contar por clase de tono (en ♯ para consistencia interna)
+  const key = toSharp(notaPC);
+  conteoNotas[key] = (conteoNotas[key] || 0) + 1;
+  setUnicas.add(key);
 
-  // 2) acumula para resumen único
-  setUnicas.add(nota);
-
-  // 3) actualiza vistas
   renderResumen();
-  actualizarAnalisis();   // <— aquí se pinta la “Nota principal”
+  actualizarAnalisis();
 }
 
 function frecuenciaANota(freq){
   const A4 = 440;
   const n = 12 * Math.log2(freq / A4);
-  const index = Math.round(n) + 57; // A4 = índice 57 (C=0..B=11)
+  const index = Math.round(n) + 57; // A4 = índice 57 cuando C=0..B=11
   const pc = PC_SHARP[(index % 12 + 12) % 12];
   return pc; // sin octava
 }
@@ -239,59 +260,56 @@ function renderResumen(){
   const $chips = $("#chips");
   $chips.innerHTML = "";
   const arr = Array.from(setUnicas);
-  // Ordena por frecuencia desc, luego alfabético
   arr.sort((a,b)=>{
     const da = conteoNotas[a] || 0, db = conteoNotas[b] || 0;
     if(db !== da) return db - da;
     return a.localeCompare(b);
   });
   const show = arr.slice(0, MAX_RESUMEN);
-  show.forEach(n => {
+  show.forEach(pc => {
     const x = document.createElement("span");
     x.className = "chip";
-    x.textContent = n;
+    x.textContent = toNombreES(pc);
     $chips.appendChild(x);
   });
 }
 
 function actualizarAnalisis(){
-  const principal = obtenerNotaPrincipal();
-  // ——— AQUÍ SE ESCRIBE LA NOTA PRINCIPAL ———
-  $("#notaPrincipal").textContent = principal || "—";
+  const principalPC = obtenerNotaPrincipalPC();
+  $("#notaPrincipal").textContent = principalPC ? toNombreES(principalPC) : "—";
 
-  // Intervalos desde la principal hacia las demás notas únicas
-  if(principal){
-    const otros = Array.from(setUnicas).filter(n => n !== principal);
-    // Orden por cercanía (semitonos ascendentes)
+  if(principalPC){
+    const otros = Array.from(setUnicas).filter(n => n !== principalPC);
+    // Orden por cercanía (semitonos)
     otros.sort((a,b)=>{
-      const da = (pitchClassIndex(a) - pitchClassIndex(principal) + 12) % 12;
-      const db = (pitchClassIndex(b) - pitchClassIndex(principal) + 12) % 12;
+      const da = (pitchClassIndex(a) - pitchClassIndex(principalPC) + 12) % 12;
+      const db = (pitchClassIndex(b) - pitchClassIndex(principalPC) + 12) % 12;
       return da - db;
     });
-    const items = otros.map(n => `${intervalBetween(principal, n)} (${n})`);
+    const items = otros.map(pc => `${intervalBetween(principalPC, pc)} (${toNombreES(pc)})`);
     $("#intervalos").textContent = items.length ? items.join(" · ") : "—";
   }else{
     $("#intervalos").textContent = "—";
   }
 
-  // Acordes sugeridos con las notas únicas
+  // Acordes sugeridos (Tonal usa letras; mostramos nombres españoles al final)
   const notasParaAcorde = Array.from(setUnicas);
   let acordes = [];
   try{
     acordes = Tonal?.Chord?.detect?.(notasParaAcorde) || [];
   }catch(e){ acordes = []; }
-
+  // Se muestran como los devuelve Tonal (letras). Si quieres convertir también
+  // las fundamentales de los acordes a español, dímelo y lo cambiamos.
   $("#acordes").textContent = acordes.length ? acordes.slice(0, 6).join(" · ") : "—";
 }
 
-function obtenerNotaPrincipal(){
-  // Devuelve la nota con mayor conteo (frecuencia de aparición)
+function obtenerNotaPrincipalPC(){
   let mejor = null, max = -1;
-  for(const n of Object.keys(conteoNotas)){
-    const c = conteoNotas[n] || 0;
-    if(c > max){ max = c; mejor = n; }
+  for(const pc of Object.keys(conteoNotas)){
+    const c = conteoNotas[pc] || 0;
+    if(c > max){ max = c; mejor = pc; }
   }
-  return mejor;
+  return mejor; // clase de tono (C, C#, ...)
 }
 
 /* ========================= Autocorrelación ========================= */
@@ -300,7 +318,7 @@ function autoCorrelate(buf, sampleRate){
   let rms = 0;
   for(let i=0;i<SIZE;i++) rms += buf[i]*buf[i];
   rms = Math.sqrt(rms/SIZE);
-  if(rms < 0.01) return -1; // señal muy débil
+  if(rms < 0.01) return -1;
 
   let r1 = 0, r2 = SIZE - 1, thresh = 0.2;
   for(let i=0;i<SIZE/2;i++){ if(Math.abs(buf[i]) < thresh){ r1 = i; break; } }
@@ -308,7 +326,6 @@ function autoCorrelate(buf, sampleRate){
 
   buf = buf.slice(r1, r2); SIZE = buf.length;
   const c = new Array(SIZE).fill(0);
-
   for(let i=0;i<SIZE;i++){
     for(let j=0;j<SIZE - i;j++){
       c[i] += buf[j] * buf[j + i];
