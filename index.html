@@ -5,341 +5,200 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Detector IA de Notas</title>
 
-<link rel="apple-touch-icon" href="icono.png" />
-<meta name="apple-mobile-web-app-capable" content="yes" />
-
 <script src="https://cdn.jsdelivr.net/npm/tonal/browser/tonal.min.js"></script>
 
 <style>
-  :root{
-    --bg:#0f172a; --panel:#1e293b; --txt:#e2e8f0; --muted:#94a3b8;
-    --primary:#2563eb; --danger:#ef4444; --chip:#0ea5e9; --note:#22c55e;
-  }
-  *{ box-sizing: border-box }
-  body{
-    font-family: Arial, system-ui, -apple-system, Segoe UI, Roboto;
-    background:var(--bg); color:var(--txt); text-align:center; margin:0; padding: 16px 14px 40px;
-  }
-  h2{ margin:8px 0 4px }
-  #controles{ display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin: 10px 0 6px; }
-  select, button{
-    padding: 12px 14px; font-size: 16px; border-radius:10px; border:none; color:#fff; cursor:pointer;
-    background:#334155;
-  }
-  button.primary{ background:var(--primary) }
-  button.danger{ background:var(--danger) }
-  button.secondary{ background:#475569 }
-  button:disabled{ opacity:.55; cursor:not-allowed }
-  #notaActual{ font-size:52px; color:var(--note); margin: 8px 0 2px; min-height:1.2em }
-  #pista{ color:var(--muted); font-size:14px; margin-bottom:10px }
-  #resumen, #analisis{
-    background:var(--panel); max-width:740px; margin: 12px auto 0; text-align:left;
-    padding:14px; border-radius:12px;
-  }
-  #resumen h3, #analisis h3{ margin:0 0 8px; font-size:18px }
-  #chips{ display:flex; flex-wrap: wrap; gap:8px; }
-  .chip{ background:var(--chip); color:#081018; padding:6px 10px; border-radius:9999px; font-weight:700 }
-  .fila{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-  .label{ min-width:190px; color:#cbd5e1; font-weight:600 }
-  .valor{ color:#fff }
-  code.badge{ background:#0b1220; padding:4px 8px; border-radius:8px; font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+:root{
+  --bg:#0f172a; --panel:#1e293b; --txt:#e2e8f0; --muted:#94a3b8;
+  --primary:#2563eb; --danger:#ef4444; --chip:#0ea5e9; --note:#22c55e;
+}
+body{font-family:Arial;background:var(--bg);color:var(--txt);text-align:center;padding:15px}
+button{padding:10px;border-radius:10px;border:none;color:white;cursor:pointer;margin:5px}
+.primary{background:var(--primary)} .danger{background:var(--danger)} .secondary{background:#475569}
+#notaActual{font-size:50px;color:var(--note)}
+#resumen,#analisis,#listaCanciones{
+  background:var(--panel);padding:15px;margin-top:15px;border-radius:12px;max-width:700px;margin-left:auto;margin-right:auto;text-align:left;
+}
+.chip{background:var(--chip);padding:5px 10px;border-radius:20px;margin:3px;display:inline-block}
 </style>
 </head>
 
 <body>
-  <h2>🎼 Detector IA de Notas, Intervalos y Acordes</h2>
 
-  <div id="controles">
-    <select id="instrumento" title="Instrumento">
-      <option value="guitarra" selected>Guitarra (♯)</option>
-      <option value="bajo">Bajo (♯)</option>
-      <option value="piano">Piano (♭)</option>
-    </select>
-    <button id="btnStart" class="primary" onclick="iniciar()">Activar micrófono</button>
-    <button id="btnStop" class="danger" onclick="detener()" disabled>Detener micrófono</button>
-    <button id="btnLimpiar" class="secondary" onclick="limpiar()">Limpiar</button>
-  </div>
+<h2>🎼 Detector IA de Notas</h2>
 
-  <div id="notaActual">—</div>
-  <div id="pista">Sostén la nota por ~½ segundo para una detección más estable.</div>
+<button class="primary" onclick="iniciar()">Activar micrófono</button>
+<button class="danger" onclick="detener()">Detener</button>
+<button class="secondary" onclick="limpiar()">Limpiar</button>
 
-  <div id="resumen">
-    <h3>Resumen (notas únicas)</h3>
-    <div id="chips"></div>
-  </div>
+<div id="notaActual">—</div>
 
-  <div id="analisis">
-    <h3>Ánalisis musical</h3>
-    <div class="fila"><div class="label">Nota principal:</div><div class="valor" id="notaPrincipal">—</div></div>
-    <div class="fila"><div class="label">Intervalos (desde la principal):</div><div class="valor" id="intervalos">—</div></div>
-    <div class="fila"><div class="label">Acordes sugeridos:</div><div class="valor" id="acordes">—</div></div>
-  </div>
+<div id="resumen">
+<h3>Notas detectadas</h3>
+<div id="chips"></div>
+</div>
+
+<div id="analisis">
+<h3>Análisis</h3>
+<div>Nota principal: <span id="notaPrincipal">—</span></div>
+<div>Intervalos: <span id="intervalos">—</span></div>
+<div>Acordes: <span id="acordes">—</span></div>
+</div>
+
+<!-- GUARDAR -->
+<div id="guardarCancion">
+<h3>💾 Guardar canción</h3>
+<input type="text" id="nombreCancion" placeholder="Nombre de la canción" style="padding:10px;border-radius:10px;border:none;width:90%;">
+<br><br>
+<button class="primary" onclick="guardarCancion()">Guardar</button>
+</div>
+
+<!-- LISTA -->
+<div id="listaCanciones">
+<h3>🎵 Canciones guardadas</h3>
+<div id="contenidoCanciones"></div>
+</div>
 
 <script>
-/* ========================= Configuración ========================= */
-const PC_SHARP = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
-const SHARP_TO_FLAT = { "C#":"Db","D#":"Eb","F#":"Gb","G#":"Ab","A#":"Bb" };
-const FLAT_TO_SHARP  = { "Db":"C#", "Eb":"D#", "Gb":"F#", "Ab":"G#", "Bb":"A#" };
+const PC=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+const NOMBRES={"C":"Do","D":"Re","E":"Mi","F":"Fa","G":"Sol","A":"La","B":"Si",
+"C#":"Do♯","D#":"Re♯","F#":"Fa♯","G#":"Sol♯","A#":"La♯"};
 
-// Nombres en español
-const NOMBRE_ES_BASE = { "C":"Do", "D":"Re", "E":"Mi", "F":"Fa", "G":"Sol", "A":"La", "B":"Si" };
-const NOMBRE_ES_SHARP = {           // preferencia de ♯
-  "C":"Do",  "C#":"Do♯", "D":"Re",  "D#":"Re♯", "E":"Mi",
-  "F":"Fa",  "F#":"Fa♯", "G":"Sol", "G#":"Sol♯","A":"La","A#":"La♯","B":"Si"
-};
-const NOMBRE_ES_FLAT = {            // preferencia de ♭
-  "C":"Do",  "Db":"Re♭", "D":"Re",  "Eb":"Mi♭", "E":"Mi",
-  "F":"Fa",  "Gb":"Sol♭","G":"Sol", "Ab":"La♭","A":"La","Bb":"Si♭","B":"Si"
-};
+let audioContext, analyser, micStream;
+let notasSet=new Set(), conteo={};
 
-const SEMI_TO_INTERVAL = {
-  0:"1P", 1:"2m", 2:"2M", 3:"3m", 4:"3M", 5:"4P",
-  6:"TT", 7:"5P", 8:"6m", 9:"6M", 10:"7m", 11:"7M"
-};
-const MAX_RESUMEN = 7;
-const MIN_HOLD_FRAMES = 3;
-
-/* ========================= Estado ========================= */
-let audioContext = null;
-let analyser = null;
-let micStream = null;
-let rafId = null;
-
-const conteoNotas = {};           // { C: 12, D: 3, ... }  *clases de tono en ♯*
-const setUnicas = new Set();      // idem
-let lastFrameNote = null;
-let holdFrames = 0;
-let notaActual = null;
-
-/* ========================= Utilidades ========================= */
-const $ = s => document.querySelector(s);
-const $btnStart = $("#btnStart");
-const $btnStop = $("#btnStop");
-const $instrumento = $("#instrumento");
-
-function toSharp(n){ return FLAT_TO_SHARP[n] || n; }
-function toFlat(n){ return SHARP_TO_FLAT[n] || n; }
-
-function formatByInstrument(nota){
-  const inst = $instrumento.value;    // guitarra | bajo | piano
-  if(inst === "piano") return toFlat(nota);
-  return toSharp(nota);
-}
-
-// ► Conversión a nombre en español según instrumento
-function toNombreES(notaPC){
-  const inst = $instrumento.value;
-  if(inst === "piano"){
-    // En piano preferimos bemoles
-    const flat = toFlat(notaPC);
-    return NOMBRE_ES_FLAT[flat] || NOMBRE_ES_SHARP[notaPC] || notaPC;
-  }else{
-    // Guitarra/Bajo preferimos sostenidos
-    const sharp = toSharp(notaPC);
-    return NOMBRE_ES_SHARP[sharp] || NOMBRE_ES_FLAT[notaPC] || notaPC;
-  }
-}
-
-function pitchClassIndex(nota){  // usa versión ♯ para indexar
-  const s = toSharp(nota);
-  return PC_SHARP.indexOf(s);
-}
-
-function intervalBetween(from, to){
-  try{
-    const i = Tonal?.Distance?.interval?.(from, to) || Tonal?.Interval?.distance?.(from, to);
-    if(i) return i;
-  }catch(e){}
-  const a = pitchClassIndex(from), b = pitchClassIndex(to);
-  if(a < 0 || b < 0) return "?";
-  const semi = (b - a + 12) % 12;
-  return SEMI_TO_INTERVAL[semi] || "?";
-}
-
-/* ========================= Flujo principal ========================= */
-async function iniciar(){
-  try{
-    if(!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const mic = audioContext.createMediaStreamSource(micStream);
-
-    analyser = audioContext.createAnalyser();
-    analyser.fftSize = 2048;
-    mic.connect(analyser);
-
-    $btnStart.disabled = true;
-    $btnStop.disabled = false;
-
-    loopDeteccion();
-  }catch(err){
-    console.error(err);
-    alert("No se pudo acceder al micrófono. Revisa permisos del navegador.");
-  }
+function iniciar(){
+navigator.mediaDevices.getUserMedia({audio:true}).then(stream=>{
+audioContext=new AudioContext();
+analyser=audioContext.createAnalyser();
+let mic=audioContext.createMediaStreamSource(stream);
+mic.connect(analyser);
+micStream=stream;
+loop();
+});
 }
 
 function detener(){
-  try{
-    if(rafId) cancelAnimationFrame(rafId);
-    rafId = null;
-    if(micStream){
-      micStream.getTracks().forEach(t => t.stop());
-      micStream = null;
-    }
-    if(audioContext){
-      audioContext.close();
-      audioContext = null;
-    }
-  }finally{
-    $btnStart.disabled = false;
-    $btnStop.disabled = true;
-  }
+if(micStream) micStream.getTracks().forEach(t=>t.stop());
 }
 
 function limpiar(){
-  for(const k of Object.keys(conteoNotas)) delete conteoNotas[k];
-  setUnicas.clear();
-  lastFrameNote = null;
-  holdFrames = 0;
-  notaActual = null;
-
-  $("#notaActual").textContent = "—";
-  $("#notaPrincipal").textContent = "—";
-  $("#intervalos").textContent = "—";
-  $("#acordes").textContent = "—";
-  renderResumen();
+notasSet.clear();
+conteo={};
+render();
 }
 
-/* ========================= Detección ========================= */
-function loopDeteccion(){
-  if(!analyser || !audioContext) return;
-
-  const buffer = new Float32Array(analyser.fftSize);
-  analyser.getFloatTimeDomainData(buffer);
-
-  const freq = autoCorrelate(buffer, audioContext.sampleRate);
-  if(freq !== -1 && Number.isFinite(freq)){
-    const base = frecuenciaANota(freq);         // C, C#, D...
-    const nFmt = formatByInstrument(base);      // según instrumento (sigue siendo PC)
-    if(lastFrameNote === nFmt){
-      holdFrames++;
-    }else{
-      holdFrames = 1;
-      lastFrameNote = nFmt;
-    }
-    if(holdFrames >= MIN_HOLD_FRAMES && notaActual !== nFmt){
-      notaActual = nFmt;
-      onStableNote(nFmt);
-    }
-  }
-  rafId = requestAnimationFrame(loopDeteccion);
+function loop(){
+let buffer=new Float32Array(analyser.fftSize);
+analyser.getFloatTimeDomainData(buffer);
+let freq=autoCorrelate(buffer,audioContext.sampleRate);
+if(freq!=-1){
+let nota=frecuenciaANota(freq);
+notasSet.add(nota);
+conteo[nota]=(conteo[nota]||0)+1;
+document.getElementById("notaActual").textContent=NOMBRES[nota];
+render();
 }
-
-function onStableNote(notaPC){
-  // Mostrar nombre español
-  $("#notaActual").textContent = toNombreES(notaPC);
-
-  // Contar por clase de tono (en ♯ para consistencia interna)
-  const key = toSharp(notaPC);
-  conteoNotas[key] = (conteoNotas[key] || 0) + 1;
-  setUnicas.add(key);
-
-  renderResumen();
-  actualizarAnalisis();
+requestAnimationFrame(loop);
 }
 
 function frecuenciaANota(freq){
-  const A4 = 440;
-  const n = 12 * Math.log2(freq / A4);
-  const index = Math.round(n) + 57; // A4 = índice 57 cuando C=0..B=11
-  const pc = PC_SHARP[(index % 12 + 12) % 12];
-  return pc; // sin octava
+let A4=440;
+let n=12*Math.log2(freq/A4);
+let index=Math.round(n)+57;
+return PC[(index%12+12)%12];
 }
 
-/* ========================= Render/Análisis ========================= */
-function renderResumen(){
-  const $chips = $("#chips");
-  $chips.innerHTML = "";
-  const arr = Array.from(setUnicas);
-  arr.sort((a,b)=>{
-    const da = conteoNotas[a] || 0, db = conteoNotas[b] || 0;
-    if(db !== da) return db - da;
-    return a.localeCompare(b);
-  });
-  const show = arr.slice(0, MAX_RESUMEN);
-  show.forEach(pc => {
-    const x = document.createElement("span");
-    x.className = "chip";
-    x.textContent = toNombreES(pc);
-    $chips.appendChild(x);
-  });
+function render(){
+let chips=document.getElementById("chips");
+chips.innerHTML="";
+notasSet.forEach(n=>{
+chips.innerHTML+=`<span class="chip">${NOMBRES[n]}</span>`;
+});
+analizar();
 }
 
-function actualizarAnalisis(){
-  const principalPC = obtenerNotaPrincipalPC();
-  $("#notaPrincipal").textContent = principalPC ? toNombreES(principalPC) : "—";
+function analizar(){
+let principal=null,max=0;
+for(let n in conteo){
+if(conteo[n]>max){max=conteo[n];principal=n;}
+}
+document.getElementById("notaPrincipal").textContent=principal?NOMBRES[principal]:"—";
 
-  if(principalPC){
-    const otros = Array.from(setUnicas).filter(n => n !== principalPC);
-    // Orden por cercanía (semitonos)
-    otros.sort((a,b)=>{
-      const da = (pitchClassIndex(a) - pitchClassIndex(principalPC) + 12) % 12;
-      const db = (pitchClassIndex(b) - pitchClassIndex(principalPC) + 12) % 12;
-      return da - db;
-    });
-    const items = otros.map(pc => `${intervalBetween(principalPC, pc)} (${toNombreES(pc)})`);
-    $("#intervalos").textContent = items.length ? items.join(" · ") : "—";
-  }else{
-    $("#intervalos").textContent = "—";
-  }
+let intervalos=[];
+notasSet.forEach(n=>{
+if(n!==principal){
+intervalos.push(n);
+}
+});
+document.getElementById("intervalos").textContent=intervalos.map(n=>NOMBRES[n]).join(" - ")||"—";
 
-  // Acordes sugeridos (Tonal usa letras; mostramos nombres españoles al final)
-  const notasParaAcorde = Array.from(setUnicas);
-  let acordes = [];
-  try{
-    acordes = Tonal?.Chord?.detect?.(notasParaAcorde) || [];
-  }catch(e){ acordes = []; }
-  // Se muestran como los devuelve Tonal (letras). Si quieres convertir también
-  // las fundamentales de los acordes a español, dímelo y lo cambiamos.
-  $("#acordes").textContent = acordes.length ? acordes.slice(0, 6).join(" · ") : "—";
+let acordes=Tonal.Chord.detect(Array.from(notasSet));
+document.getElementById("acordes").textContent=acordes.join(" - ")||"—";
 }
 
-function obtenerNotaPrincipalPC(){
-  let mejor = null, max = -1;
-  for(const pc of Object.keys(conteoNotas)){
-    const c = conteoNotas[pc] || 0;
-    if(c > max){ max = c; mejor = pc; }
-  }
-  return mejor; // clase de tono (C, C#, ...)
+/* ===== GUARDAR ===== */
+
+function guardarCancion(){
+let nombre=document.getElementById("nombreCancion").value.trim();
+if(!nombre){alert("Escribe nombre");return;}
+if(notasSet.size===0){alert("No hay notas");return;}
+
+let notas=Array.from(notasSet).map(n=>NOMBRES[n]);
+
+let canciones=JSON.parse(localStorage.getItem("canciones"))||[];
+
+canciones.push({nombre,notas});
+
+localStorage.setItem("canciones",JSON.stringify(canciones));
+
+document.getElementById("nombreCancion").value="";
+mostrarCanciones();
 }
 
-/* ========================= Autocorrelación ========================= */
-function autoCorrelate(buf, sampleRate){
-  let SIZE = buf.length;
-  let rms = 0;
-  for(let i=0;i<SIZE;i++) rms += buf[i]*buf[i];
-  rms = Math.sqrt(rms/SIZE);
-  if(rms < 0.01) return -1;
+function mostrarCanciones(){
+let canciones=JSON.parse(localStorage.getItem("canciones"))||[];
+let cont=document.getElementById("contenidoCanciones");
+cont.innerHTML="";
 
-  let r1 = 0, r2 = SIZE - 1, thresh = 0.2;
-  for(let i=0;i<SIZE/2;i++){ if(Math.abs(buf[i]) < thresh){ r1 = i; break; } }
-  for(let i=1;i<SIZE/2;i++){ if(Math.abs(buf[SIZE - i]) < thresh){ r2 = SIZE - i; break; } }
+canciones.slice().reverse().forEach(c=>{
+cont.innerHTML+=`
+<div>
+<strong>${c.nombre}</strong><br>
+Notas: ${c.notas.join(" - ")}
+<hr>
+</div>
+`;
+});
+}
 
-  buf = buf.slice(r1, r2); SIZE = buf.length;
-  const c = new Array(SIZE).fill(0);
-  for(let i=0;i<SIZE;i++){
-    for(let j=0;j<SIZE - i;j++){
-      c[i] += buf[j] * buf[j + i];
-    }
-  }
-  let d = 0; while(c[d] > c[d+1]) d++;
-  let maxval = -1, maxpos = -1;
-  for(let i=d;i<SIZE;i++){
-    if(c[i] > maxval){ maxval = c[i]; maxpos = i; }
-  }
-  const T0 = maxpos;
-  if(T0 <= 0) return -1;
-  return sampleRate / T0;
+mostrarCanciones();
+
+/* ===== DETECTOR ===== */
+
+function autoCorrelate(buf,sampleRate){
+let SIZE=buf.length;
+let rms=0;
+for(let i=0;i<SIZE;i++) rms+=buf[i]*buf[i];
+rms=Math.sqrt(rms/SIZE);
+if(rms<0.01) return -1;
+
+let c=new Array(SIZE).fill(0);
+for(let i=0;i<SIZE;i++){
+for(let j=0;j<SIZE-i;j++){
+c[i]+=buf[j]*buf[j+i];
+}
+}
+
+let max=0,pos=0;
+for(let i=0;i<SIZE;i++){
+if(c[i]>max){max=c[i];pos=i;}
+}
+
+if(pos==0) return -1;
+return sampleRate/pos;
 }
 </script>
+
 </body>
 </html>
