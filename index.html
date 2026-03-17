@@ -16,7 +16,7 @@ body{font-family:Arial;background:var(--bg);color:var(--txt);text-align:center;p
 button{padding:10px;border-radius:10px;border:none;color:white;cursor:pointer;margin:5px}
 .primary{background:var(--primary)} .danger{background:var(--danger)} .secondary{background:#475569}
 #notaActual{font-size:50px;color:var(--note)}
-#resumen,#analisis,#listaCanciones,#iaCancion{
+#resumen,#analisis,#listaCanciones,#iaCancion,#escalaMusical{
   background:var(--panel);padding:15px;margin-top:15px;border-radius:12px;max-width:700px;margin:auto;text-align:left;
 }
 .chip{background:var(--chip);padding:5px 10px;border-radius:20px;margin:3px;display:inline-block}
@@ -50,6 +50,11 @@ button{padding:10px;border-radius:10px;border:none;color:white;cursor:pointer;ma
 <div id="cancionDetectada">—</div>
 </div>
 
+<div id="escalaMusical">
+<h3>🎼 Escala detectada</h3>
+<div id="escalaDetectada">—</div>
+</div>
+
 <div id="guardarCancion">
 <h3>💾 Guardar canción</h3>
 <input type="text" id="nombreCancion" placeholder="Nombre de la canción" style="padding:10px;border-radius:10px;border:none;width:90%;">
@@ -64,14 +69,17 @@ button{padding:10px;border-radius:10px;border:none;color:white;cursor:pointer;ma
 
 <script>
 const PC=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
-const NOMBRES={"C":"Do","D":"Re","E":"Mi","F":"Fa","G":"Sol","A":"La","B":"Si",
-"C#":"Do♯","D#":"Re♯","F#":"Fa♯","G#":"Sol♯","A#":"La♯"};
+
+// ✅ NOTAS EN MAYÚSCULAS
+const NOMBRES={
+"C":"DO","D":"RE","E":"MI","F":"FA","G":"SOL","A":"LA","B":"SI",
+"C#":"DO♯","D#":"RE♯","F#":"FA♯","G#":"SOL♯","A#":"LA♯"
+};
 
 let audioContext, analyser, micStream;
 let notasSet=new Set(), conteo={};
 let historialFrecuencias=[];
 
-/* ===== INICIAR ===== */
 function iniciar(){
 navigator.mediaDevices.getUserMedia({audio:true}).then(stream=>{
 audioContext=new AudioContext();
@@ -87,7 +95,6 @@ function detener(){
 if(micStream) micStream.getTracks().forEach(t=>t.stop());
 }
 
-/* ===== LIMPIAR ===== */
 function limpiar(){
 notasSet.clear();
 conteo={};
@@ -95,7 +102,6 @@ historialFrecuencias=[];
 render();
 }
 
-/* ===== LOOP MEJORADO ===== */
 function loop(){
 let buffer=new Float32Array(analyser.fftSize);
 analyser.getFloatTimeDomainData(buffer);
@@ -118,12 +124,12 @@ document.getElementById("notaActual").textContent=NOMBRES[nota];
 
 render();
 detectarCancionIA();
+detectarEscala();
 }
 
 requestAnimationFrame(loop);
 }
 
-/* ===== NOTAS ===== */
 function frecuenciaANota(freq){
 let A4=440;
 let n=12*Math.log2(freq/A4);
@@ -131,7 +137,6 @@ let index=Math.round(n)+57;
 return PC[(index%12+12)%12];
 }
 
-/* ===== RENDER ===== */
 function render(){
 let chips=document.getElementById("chips");
 chips.innerHTML="";
@@ -141,7 +146,6 @@ chips.innerHTML+=`<span class="chip">${NOMBRES[n]}</span>`;
 analizar();
 }
 
-/* ===== ANALISIS ===== */
 function analizar(){
 let principal=null,max=0;
 for(let n in conteo){
@@ -159,7 +163,6 @@ let acordes=Tonal.Chord.detect(Array.from(notasSet));
 document.getElementById("acordes").textContent=acordes.join(" - ")||"—";
 }
 
-/* ===== GUARDAR ===== */
 function guardarCancion(){
 let nombre=document.getElementById("nombreCancion").value.trim();
 if(!nombre){alert("Escribe nombre");return;}
@@ -191,7 +194,6 @@ Notas: ${c.notas.join(" - ")}
 }
 mostrarCanciones();
 
-/* ===== IA DETECTOR ===== */
 const BASE_CANCIONES=[
 {nombre:"Cumpleaños Feliz", notas:["C","D","E"]},
 {nombre:"Oda a la Alegría", notas:["E","F","G"]},
@@ -226,14 +228,60 @@ document.getElementById("cancionDetectada").textContent =
 scoreMax>=3 ? "🎵 "+mejor : "Escuchando...";
 }
 
-/* ===== DETECTOR ===== */
+/* ===== ESCALA EN ESPAÑOL ===== */
+function detectarEscala(){
+
+let notas = Array.from(notasSet);
+
+if(notas.length < 3){
+document.getElementById("escalaDetectada").textContent = "Detectando...";
+return;
+}
+
+let posibles = [];
+
+PC.forEach(root => {
+
+try{
+let mayor = Tonal.Scale.get(root + " major").notes;
+let menor = Tonal.Scale.get(root + " minor").notes;
+
+let scoreMayor = compararEscala(notas, mayor);
+let scoreMenor = compararEscala(notas, menor);
+
+// ✅ ESCALA EN ESPAÑOL
+if(scoreMayor > 0) posibles.push({nombre: NOMBRES[root]+" MAYOR", score: scoreMayor});
+if(scoreMenor > 0) posibles.push({nombre: NOMBRES[root]+" MENOR", score: scoreMenor});
+
+}catch(e){}
+
+});
+
+posibles.sort((a,b)=>b.score-a.score);
+
+if(posibles.length > 0 && posibles[0].score >= 3){
+document.getElementById("escalaDetectada").textContent =
+"🎼 "+posibles[0].nombre;
+}else{
+document.getElementById("escalaDetectada").textContent = "No clara aún...";
+}
+
+}
+
+function compararEscala(notas, escala){
+let score=0;
+notas.forEach(n=>{
+if(escala.includes(n)) score++;
+});
+return score;
+}
+
 function autoCorrelate(buf,sampleRate){
 let SIZE=buf.length;
 let rms=0;
 for(let i=0;i<SIZE;i++) rms+=buf[i]*buf[i];
 rms=Math.sqrt(rms/SIZE);
 
-// MÁS FILTRO DE RUIDO
 if(rms<0.02) return -1;
 
 let c=new Array(SIZE).fill(0);
