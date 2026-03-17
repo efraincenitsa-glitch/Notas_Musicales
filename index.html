@@ -9,15 +9,15 @@
 
 <style>
 :root{
-  --bg:#0f172a; --panel:#1e293b; --txt:#e2e8f0; --muted:#94a3b8;
+  --bg:#0f172a; --panel:#1e293b; --txt:#e2e8f0;
   --primary:#2563eb; --danger:#ef4444; --chip:#0ea5e9; --note:#22c55e;
 }
 body{font-family:Arial;background:var(--bg);color:var(--txt);text-align:center;padding:15px}
 button{padding:10px;border-radius:10px;border:none;color:white;cursor:pointer;margin:5px}
 .primary{background:var(--primary)} .danger{background:var(--danger)} .secondary{background:#475569}
 #notaActual{font-size:50px;color:var(--note)}
-#resumen,#analisis,#listaCanciones{
-  background:var(--panel);padding:15px;margin-top:15px;border-radius:12px;max-width:700px;margin-left:auto;margin-right:auto;text-align:left;
+#resumen,#analisis,#listaCanciones,#iaCancion{
+  background:var(--panel);padding:15px;margin-top:15px;border-radius:12px;max-width:700px;margin:auto;text-align:left;
 }
 .chip{background:var(--chip);padding:5px 10px;border-radius:20px;margin:3px;display:inline-block}
 </style>
@@ -45,7 +45,11 @@ button{padding:10px;border-radius:10px;border:none;color:white;cursor:pointer;ma
 <div>Acordes: <span id="acordes">—</span></div>
 </div>
 
-<!-- GUARDAR -->
+<div id="iaCancion">
+<h3>🧠 Detección automática</h3>
+<div id="cancionDetectada">—</div>
+</div>
+
 <div id="guardarCancion">
 <h3>💾 Guardar canción</h3>
 <input type="text" id="nombreCancion" placeholder="Nombre de la canción" style="padding:10px;border-radius:10px;border:none;width:90%;">
@@ -53,7 +57,6 @@ button{padding:10px;border-radius:10px;border:none;color:white;cursor:pointer;ma
 <button class="primary" onclick="guardarCancion()">Guardar</button>
 </div>
 
-<!-- LISTA -->
 <div id="listaCanciones">
 <h3>🎵 Canciones guardadas</h3>
 <div id="contenidoCanciones"></div>
@@ -66,7 +69,9 @@ const NOMBRES={"C":"Do","D":"Re","E":"Mi","F":"Fa","G":"Sol","A":"La","B":"Si",
 
 let audioContext, analyser, micStream;
 let notasSet=new Set(), conteo={};
+let historialFrecuencias=[];
 
+/* ===== INICIAR ===== */
 function iniciar(){
 navigator.mediaDevices.getUserMedia({audio:true}).then(stream=>{
 audioContext=new AudioContext();
@@ -82,26 +87,43 @@ function detener(){
 if(micStream) micStream.getTracks().forEach(t=>t.stop());
 }
 
+/* ===== LIMPIAR ===== */
 function limpiar(){
 notasSet.clear();
 conteo={};
+historialFrecuencias=[];
 render();
 }
 
+/* ===== LOOP MEJORADO ===== */
 function loop(){
 let buffer=new Float32Array(analyser.fftSize);
 analyser.getFloatTimeDomainData(buffer);
+
 let freq=autoCorrelate(buffer,audioContext.sampleRate);
-if(freq!=-1){
-let nota=frecuenciaANota(freq);
+
+if(freq > 80 && freq < 1200){
+
+historialFrecuencias.push(freq);
+if(historialFrecuencias.length > 5) historialFrecuencias.shift();
+
+let promedio = historialFrecuencias.reduce((a,b)=>a+b,0)/historialFrecuencias.length;
+
+let nota=frecuenciaANota(promedio);
+
 notasSet.add(nota);
 conteo[nota]=(conteo[nota]||0)+1;
+
 document.getElementById("notaActual").textContent=NOMBRES[nota];
+
 render();
+detectarCancionIA();
 }
+
 requestAnimationFrame(loop);
 }
 
+/* ===== NOTAS ===== */
 function frecuenciaANota(freq){
 let A4=440;
 let n=12*Math.log2(freq/A4);
@@ -109,6 +131,7 @@ let index=Math.round(n)+57;
 return PC[(index%12+12)%12];
 }
 
+/* ===== RENDER ===== */
 function render(){
 let chips=document.getElementById("chips");
 chips.innerHTML="";
@@ -118,6 +141,7 @@ chips.innerHTML+=`<span class="chip">${NOMBRES[n]}</span>`;
 analizar();
 }
 
+/* ===== ANALISIS ===== */
 function analizar(){
 let principal=null,max=0;
 for(let n in conteo){
@@ -127,9 +151,7 @@ document.getElementById("notaPrincipal").textContent=principal?NOMBRES[principal
 
 let intervalos=[];
 notasSet.forEach(n=>{
-if(n!==principal){
-intervalos.push(n);
-}
+if(n!==principal){intervalos.push(n);}
 });
 document.getElementById("intervalos").textContent=intervalos.map(n=>NOMBRES[n]).join(" - ")||"—";
 
@@ -138,18 +160,15 @@ document.getElementById("acordes").textContent=acordes.join(" - ")||"—";
 }
 
 /* ===== GUARDAR ===== */
-
 function guardarCancion(){
 let nombre=document.getElementById("nombreCancion").value.trim();
 if(!nombre){alert("Escribe nombre");return;}
 if(notasSet.size===0){alert("No hay notas");return;}
 
 let notas=Array.from(notasSet).map(n=>NOMBRES[n]);
-
 let canciones=JSON.parse(localStorage.getItem("canciones"))||[];
 
 canciones.push({nombre,notas});
-
 localStorage.setItem("canciones",JSON.stringify(canciones));
 
 document.getElementById("nombreCancion").value="";
@@ -167,21 +186,55 @@ cont.innerHTML+=`
 <strong>${c.nombre}</strong><br>
 Notas: ${c.notas.join(" - ")}
 <hr>
-</div>
-`;
+</div>`;
 });
 }
-
 mostrarCanciones();
 
-/* ===== DETECTOR ===== */
+/* ===== IA DETECTOR ===== */
+const BASE_CANCIONES=[
+{nombre:"Cumpleaños Feliz", notas:["C","D","E"]},
+{nombre:"Oda a la Alegría", notas:["E","F","G"]},
+{nombre:"Let It Be", notas:["C","G","A","F"]},
+{nombre:"Canon en D", notas:["D","A","B","F#","G"]}
+];
 
+function detectarCancionIA(){
+let notasActuales=Array.from(notasSet);
+let acordes=Tonal.Chord.detect(notasActuales);
+
+let mejor=null,scoreMax=0;
+
+BASE_CANCIONES.forEach(c=>{
+let score=0;
+
+c.notas.forEach(n=>{
+if(notasActuales.includes(n)) score++;
+});
+
+acordes.forEach(a=>{
+if(c.notas.includes(a.replace("m",""))) score+=2;
+});
+
+if(score>scoreMax){
+scoreMax=score;
+mejor=c.nombre;
+}
+});
+
+document.getElementById("cancionDetectada").textContent =
+scoreMax>=3 ? "🎵 "+mejor : "Escuchando...";
+}
+
+/* ===== DETECTOR ===== */
 function autoCorrelate(buf,sampleRate){
 let SIZE=buf.length;
 let rms=0;
 for(let i=0;i<SIZE;i++) rms+=buf[i]*buf[i];
 rms=Math.sqrt(rms/SIZE);
-if(rms<0.01) return -1;
+
+// MÁS FILTRO DE RUIDO
+if(rms<0.02) return -1;
 
 let c=new Array(SIZE).fill(0);
 for(let i=0;i<SIZE;i++){
