@@ -3,7 +3,17 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
+
 <title>Detector IA de Notas</title>
+
+<!-- ✅ ICONO PRINCIPAL -->
+<link rel="icon" type="image/png" sizes="1024x1024" href="icon-1024.png">
+
+<!-- ✅ ICONO PARA iOS -->
+<link rel="apple-touch-icon" sizes="1024x1024" href="icon-1024.png">
+
+<!-- ✅ MANIFEST (APP INSTALABLE) -->
+<link rel="manifest" href="manifest.json">
 
 <script src="https://cdn.jsdelivr.net/npm/tonal/browser/tonal.min.js"></script>
 
@@ -70,7 +80,6 @@ button{padding:10px;border-radius:10px;border:none;color:white;cursor:pointer;ma
 <script>
 const PC=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
 
-// ✅ NOTAS EN MAYÚSCULAS
 const NOMBRES={
 "C":"DO","D":"RE","E":"MI","F":"FA","G":"SOL","A":"LA","B":"SI",
 "C#":"DO♯","D#":"RE♯","F#":"FA♯","G#":"SOL♯","A#":"LA♯"
@@ -228,7 +237,6 @@ document.getElementById("cancionDetectada").textContent =
 scoreMax>=3 ? "🎵 "+mejor : "Escuchando...";
 }
 
-/* ===== ESCALA EN ESPAÑOL ===== */
 function detectarEscala(){
 
 let notas = Array.from(notasSet);
@@ -249,7 +257,6 @@ let menor = Tonal.Scale.get(root + " minor").notes;
 let scoreMayor = compararEscala(notas, mayor);
 let scoreMenor = compararEscala(notas, menor);
 
-// ✅ ESCALA EN ESPAÑOL
 if(scoreMayor > 0) posibles.push({nombre: NOMBRES[root]+" MAYOR", score: scoreMayor});
 if(scoreMenor > 0) posibles.push({nombre: NOMBRES[root]+" MENOR", score: scoreMenor});
 
