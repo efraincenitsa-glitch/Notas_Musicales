@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-<title>Detector IA de Notas EXPERTO</title>
+<title>Detector IA PRO EXPERTO</title>
 
 <script src="https://unpkg.com/@tonaljs/tonal"></script>
 
@@ -14,11 +14,21 @@
   --primary:#2563eb; --danger:#ef4444; --ok:#22c55e;
 }
 
-body{font-family:Arial;background:var(--bg);color:var(--txt);text-align:center;padding:15px}
+body{
+font-family:Arial;
+background:var(--bg);
+color:var(--txt);
+text-align:center;
+padding:15px
+}
 
 button{
-padding:10px;border-radius:10px;border:none;color:white;
-cursor:pointer;margin:5px
+padding:10px;
+border-radius:10px;
+border:none;
+color:white;
+cursor:pointer;
+margin:5px
 }
 
 .primary{background:var(--primary)}
@@ -26,7 +36,10 @@ cursor:pointer;margin:5px
 .ok{background:var(--ok)}
 
 select,input{
-padding:10px;border-radius:10px;margin-top:10px;border:none
+padding:10px;
+border-radius:10px;
+margin-top:10px;
+border:none
 }
 
 .panel{
@@ -105,6 +118,7 @@ const PC=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
 
 let audioContext, analyser, micStream;
 let notasSet=new Set(), conteo={};
+let historial=[];
 
 /* 🎸 RANGO */
 function getRango(){
@@ -116,40 +130,69 @@ return {min:80,max:1000};
 
 /* 🎤 AUDIO */
 async function iniciar(){
-audioContext=new AudioContext();
+try{
+
+audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+if(audioContext.state === "suspended"){
 await audioContext.resume();
+}
 
-let stream=await navigator.mediaDevices.getUserMedia({audio:true});
+let stream = await navigator.mediaDevices.getUserMedia({audio:true});
 
-analyser=audioContext.createAnalyser();
-analyser.fftSize=2048;
+analyser = audioContext.createAnalyser();
+analyser.fftSize = 2048;
 
-let mic=audioContext.createMediaStreamSource(stream);
+let mic = audioContext.createMediaStreamSource(stream);
 mic.connect(analyser);
 
-micStream=stream;
+micStream = stream;
 
 loop();
+
+}catch(e){
+alert("Error micrófono: " + e.message);
+}
 }
 
 function detener(){
 if(micStream) micStream.getTracks().forEach(t=>t.stop());
 }
 
-/* LOOP */
+/* 🔁 LOOP CORREGIDO */
 function loop(){
-let buffer=new Float32Array(analyser.fftSize);
+
+if(!analyser || !audioContext){
+requestAnimationFrame(loop);
+return;
+}
+
+let buffer = new Float32Array(analyser.fftSize);
 analyser.getFloatTimeDomainData(buffer);
 
-let freq=autoCorrelate(buffer,audioContext.sampleRate);
-let r=getRango();
+let freq = autoCorrelate(buffer, audioContext.sampleRate);
 
-if(freq>r.min && freq<r.max){
-let nota=frecuenciaANota(freq);
+if(freq === -1 || isNaN(freq)){
+requestAnimationFrame(loop);
+return;
+}
+
+let r = getRango();
+
+/* 🔥 SUAVIZADO */
+historial.push(freq);
+if(historial.length > 5) historial.shift();
+
+let promedio = historial.reduce((a,b)=>a+b,0) / historial.length;
+
+if(promedio > r.min && promedio < r.max){
+
+let nota = frecuenciaANota(promedio);
+
 notasSet.add(nota);
-conteo[nota]=(conteo[nota]||0)+1;
+conteo[nota] = (conteo[nota] || 0) + 1;
 
-document.getElementById("notaActual").innerText=nota;
+document.getElementById("notaActual").innerText = nota;
 
 render();
 }
@@ -157,15 +200,16 @@ render();
 requestAnimationFrame(loop);
 }
 
-/* FRECUENCIA */
+/* 🎼 FRECUENCIA */
 function frecuenciaANota(f){
-let n=12*Math.log2(f/440);
-let i=Math.round(n)+57;
+let n = 12*Math.log2(f/440);
+let i = Math.round(n)+57;
 return PC[(i%12+12)%12];
 }
 
 /* UI */
 function render(){
+
 document.getElementById("chips").innerText=[...notasSet].join(" - ");
 
 let principal=null,max=0;
@@ -186,10 +230,11 @@ document.getElementById("acordes").innerText=acordes.join(", ");
 function limpiar(){
 notasSet.clear();
 conteo={};
+historial=[];
 render();
 }
 
-/* 💾 CRUD CANCIONES */
+/* 💾 CRUD */
 function guardarCancion(){
 
 let nombre=document.getElementById("nombreCancion").value.trim();
@@ -242,7 +287,6 @@ let data=getData();
 cont.innerHTML="";
 
 data.reverse().forEach(x=>{
-
 cont.innerHTML+=`
 <div class="item">
 <strong>${x.nombre}</strong><br>
@@ -274,7 +318,6 @@ a.click();
 /* 📂 IMPORTAR */
 function importar(e){
 let file=e.target.files[0];
-
 let reader=new FileReader();
 
 reader.onload=function(){
@@ -286,7 +329,7 @@ mostrar();
 reader.readAsText(file);
 }
 
-/* DETECTOR */
+/* 🔬 DETECTOR */
 function autoCorrelate(buf,sampleRate){
 let SIZE=buf.length;
 let rms=0;
