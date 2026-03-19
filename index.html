@@ -4,18 +4,14 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-<title>Detector IA de Notas</title>
+<title>Detector IA de Notas PRO</title>
 
-<!-- ✅ ICONO PRINCIPAL -->
 <link rel="icon" type="image/png" sizes="1024x1024" href="icon-1024.png">
-
-<!-- ✅ ICONO PARA iOS -->
 <link rel="apple-touch-icon" sizes="1024x1024" href="icon-1024.png">
-
-<!-- ✅ MANIFEST (APP INSTALABLE) -->
 <link rel="manifest" href="manifest.json">
 
-<script src="https://cdn.jsdelivr.net/npm/tonal/browser/tonal.min.js"></script>
+<!-- TONAL CORREGIDO -->
+<script src="https://unpkg.com/@tonaljs/tonal"></script>
 
 <style>
 :root{
@@ -25,7 +21,10 @@
 body{font-family:Arial;background:var(--bg);color:var(--txt);text-align:center;padding:15px}
 button{padding:10px;border-radius:10px;border:none;color:white;cursor:pointer;margin:5px}
 .primary{background:var(--primary)} .danger{background:var(--danger)} .secondary{background:#475569}
+select{padding:10px;border-radius:10px;margin-top:10px}
+
 #notaActual{font-size:50px;color:var(--note)}
+
 #resumen,#analisis,#listaCanciones,#iaCancion,#escalaMusical{
   background:var(--panel);padding:15px;margin-top:15px;border-radius:12px;max-width:700px;margin:auto;text-align:left;
 }
@@ -35,11 +34,18 @@ button{padding:10px;border-radius:10px;border:none;color:white;cursor:pointer;ma
 
 <body>
 
-<h2>🎼 Detector IA de Notas</h2>
+<h2>🎼 Detector IA de Notas PRO</h2>
 
 <button class="primary" onclick="iniciar()">Activar micrófono</button>
 <button class="danger" onclick="detener()">Detener</button>
 <button class="secondary" onclick="limpiar()">Limpiar</button>
+
+<h3>🎸 Instrumento</h3>
+<select id="instrumento">
+<option value="guitarra">Guitarra</option>
+<option value="bajo">Bajo</option>
+<option value="teclado">Teclado</option>
+</select>
 
 <div id="notaActual">—</div>
 
@@ -65,18 +71,6 @@ button{padding:10px;border-radius:10px;border:none;color:white;cursor:pointer;ma
 <div id="escalaDetectada">—</div>
 </div>
 
-<div id="guardarCancion">
-<h3>💾 Guardar canción</h3>
-<input type="text" id="nombreCancion" placeholder="Nombre de la canción" style="padding:10px;border-radius:10px;border:none;width:90%;">
-<br><br>
-<button class="primary" onclick="guardarCancion()">Guardar</button>
-</div>
-
-<div id="listaCanciones">
-<h3>🎵 Canciones guardadas</h3>
-<div id="contenidoCanciones"></div>
-</div>
-
 <script>
 const PC=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
 
@@ -89,15 +83,42 @@ let audioContext, analyser, micStream;
 let notasSet=new Set(), conteo={};
 let historialFrecuencias=[];
 
-function iniciar(){
-navigator.mediaDevices.getUserMedia({audio:true}).then(stream=>{
-audioContext=new AudioContext();
-analyser=audioContext.createAnalyser();
-let mic=audioContext.createMediaStreamSource(stream);
+/* 🎸 RANGO POR INSTRUMENTO */
+function getRangoInstrumento(){
+let inst = document.getElementById("instrumento").value;
+
+if(inst==="bajo") return {min:40,max:400};
+if(inst==="guitarra") return {min:80,max:1000};
+if(inst==="teclado") return {min:30,max:2000};
+
+return {min:80,max:1200};
+}
+
+/* 🎤 INICIAR MIC (VERSIÓN SEGURA) */
+async function iniciar(){
+try{
+
+audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+if(audioContext.state === "suspended"){
+await audioContext.resume();
+}
+
+let stream = await navigator.mediaDevices.getUserMedia({audio:true});
+
+analyser = audioContext.createAnalyser();
+analyser.fftSize = 2048;
+
+let mic = audioContext.createMediaStreamSource(stream);
 mic.connect(analyser);
-micStream=stream;
+
+micStream = stream;
+
 loop();
-});
+
+}catch(err){
+alert("Error micrófono: " + err.message);
+}
 }
 
 function detener(){
@@ -111,13 +132,18 @@ historialFrecuencias=[];
 render();
 }
 
+/* 🔁 LOOP */
 function loop(){
+if(!analyser) return;
+
 let buffer=new Float32Array(analyser.fftSize);
 analyser.getFloatTimeDomainData(buffer);
 
 let freq=autoCorrelate(buffer,audioContext.sampleRate);
 
-if(freq > 80 && freq < 1200){
+let rango = getRangoInstrumento();
+
+if(freq > rango.min && freq < rango.max){
 
 historialFrecuencias.push(freq);
 if(historialFrecuencias.length > 5) historialFrecuencias.shift();
@@ -139,6 +165,7 @@ detectarEscala();
 requestAnimationFrame(loop);
 }
 
+/* 🎼 FRECUENCIA → NOTA */
 function frecuenciaANota(freq){
 let A4=440;
 let n=12*Math.log2(freq/A4);
@@ -146,6 +173,7 @@ let index=Math.round(n)+57;
 return PC[(index%12+12)%12];
 }
 
+/* 🎨 UI */
 function render(){
 let chips=document.getElementById("chips");
 chips.innerHTML="";
@@ -155,54 +183,34 @@ chips.innerHTML+=`<span class="chip">${NOMBRES[n]}</span>`;
 analizar();
 }
 
+/* 📊 ANÁLISIS */
 function analizar(){
 let principal=null,max=0;
+
 for(let n in conteo){
 if(conteo[n]>max){max=conteo[n];principal=n;}
 }
+
 document.getElementById("notaPrincipal").textContent=principal?NOMBRES[principal]:"—";
 
 let intervalos=[];
 notasSet.forEach(n=>{
 if(n!==principal){intervalos.push(n);}
 });
-document.getElementById("intervalos").textContent=intervalos.map(n=>NOMBRES[n]).join(" - ")||"—";
 
+document.getElementById("intervalos").textContent=
+intervalos.map(n=>NOMBRES[n]).join(" - ")||"—";
+
+/* TONAL SEGURO */
+try{
 let acordes=Tonal.Chord.detect(Array.from(notasSet));
 document.getElementById("acordes").textContent=acordes.join(" - ")||"—";
+}catch(e){
+document.getElementById("acordes").textContent="—";
+}
 }
 
-function guardarCancion(){
-let nombre=document.getElementById("nombreCancion").value.trim();
-if(!nombre){alert("Escribe nombre");return;}
-if(notasSet.size===0){alert("No hay notas");return;}
-
-let notas=Array.from(notasSet).map(n=>NOMBRES[n]);
-let canciones=JSON.parse(localStorage.getItem("canciones"))||[];
-
-canciones.push({nombre,notas});
-localStorage.setItem("canciones",JSON.stringify(canciones));
-
-document.getElementById("nombreCancion").value="";
-mostrarCanciones();
-}
-
-function mostrarCanciones(){
-let canciones=JSON.parse(localStorage.getItem("canciones"))||[];
-let cont=document.getElementById("contenidoCanciones");
-cont.innerHTML="";
-
-canciones.slice().reverse().forEach(c=>{
-cont.innerHTML+=`
-<div>
-<strong>${c.nombre}</strong><br>
-Notas: ${c.notas.join(" - ")}
-<hr>
-</div>`;
-});
-}
-mostrarCanciones();
-
+/* 🤖 DETECCIÓN SIMPLE */
 const BASE_CANCIONES=[
 {nombre:"Cumpleaños Feliz", notas:["C","D","E"]},
 {nombre:"Oda a la Alegría", notas:["E","F","G"]},
@@ -212,7 +220,6 @@ const BASE_CANCIONES=[
 
 function detectarCancionIA(){
 let notasActuales=Array.from(notasSet);
-let acordes=Tonal.Chord.detect(notasActuales);
 
 let mejor=null,scoreMax=0;
 
@@ -221,10 +228,6 @@ let score=0;
 
 c.notas.forEach(n=>{
 if(notasActuales.includes(n)) score++;
-});
-
-acordes.forEach(a=>{
-if(c.notas.includes(a.replace("m",""))) score+=2;
 });
 
 if(score>scoreMax){
@@ -237,6 +240,7 @@ document.getElementById("cancionDetectada").textContent =
 scoreMax>=3 ? "🎵 "+mejor : "Escuchando...";
 }
 
+/* 🎼 ESCALA */
 function detectarEscala(){
 
 let notas = Array.from(notasSet);
@@ -246,36 +250,31 @@ document.getElementById("escalaDetectada").textContent = "Detectando...";
 return;
 }
 
-let posibles = [];
+let posibles=[];
 
-PC.forEach(root => {
-
+PC.forEach(root=>{
 try{
-let mayor = Tonal.Scale.get(root + " major").notes;
-let menor = Tonal.Scale.get(root + " minor").notes;
+let mayor=Tonal.Scale.get(root+" major").notes;
+let menor=Tonal.Scale.get(root+" minor").notes;
 
-let scoreMayor = compararEscala(notas, mayor);
-let scoreMenor = compararEscala(notas, menor);
+let sM=compararEscala(notas,mayor);
+let sMen=compararEscala(notas,menor);
 
-if(scoreMayor > 0) posibles.push({nombre: NOMBRES[root]+" MAYOR", score: scoreMayor});
-if(scoreMenor > 0) posibles.push({nombre: NOMBRES[root]+" MENOR", score: scoreMenor});
+if(sM>0) posibles.push({n:NOMBRES[root]+" MAYOR",s:sM});
+if(sMen>0) posibles.push({n:NOMBRES[root]+" MENOR",s:sMen});
 
 }catch(e){}
-
 });
 
-posibles.sort((a,b)=>b.score-a.score);
+posibles.sort((a,b)=>b.s-a.s);
 
-if(posibles.length > 0 && posibles[0].score >= 3){
 document.getElementById("escalaDetectada").textContent =
-"🎼 "+posibles[0].nombre;
-}else{
-document.getElementById("escalaDetectada").textContent = "No clara aún...";
+(posibles.length>0 && posibles[0].s>=3)
+? "🎼 "+posibles[0].n
+: "No clara aún...";
 }
 
-}
-
-function compararEscala(notas, escala){
+function compararEscala(notas,escala){
 let score=0;
 notas.forEach(n=>{
 if(escala.includes(n)) score++;
@@ -283,15 +282,18 @@ if(escala.includes(n)) score++;
 return score;
 }
 
+/* 🔬 DETECCIÓN FRECUENCIA */
 function autoCorrelate(buf,sampleRate){
 let SIZE=buf.length;
 let rms=0;
+
 for(let i=0;i<SIZE;i++) rms+=buf[i]*buf[i];
 rms=Math.sqrt(rms/SIZE);
 
 if(rms<0.02) return -1;
 
 let c=new Array(SIZE).fill(0);
+
 for(let i=0;i<SIZE;i++){
 for(let j=0;j<SIZE-i;j++){
 c[i]+=buf[j]*buf[j+i];
@@ -299,11 +301,13 @@ c[i]+=buf[j]*buf[j+i];
 }
 
 let max=0,pos=0;
+
 for(let i=0;i<SIZE;i++){
 if(c[i]>max){max=c[i];pos=i;}
 }
 
-if(pos==0) return -1;
+if(pos===0) return -1;
+
 return sampleRate/pos;
 }
 </script>
