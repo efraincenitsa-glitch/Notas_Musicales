@@ -6,6 +6,11 @@
 
 <title>Detector IA PRO EXPERTO</title>
 
+<!-- ICONO 1024 -->
+<link rel="icon" href="icono.png">
+<link rel="icon" type="image/png" sizes="1024x1024" href="icono.png">
+<link rel="apple-touch-icon" href="icono.png">
+
 <script src="https://unpkg.com/@tonaljs/tonal"></script>
 
 <style>
@@ -159,7 +164,7 @@ function detener(){
 if(micStream) micStream.getTracks().forEach(t=>t.stop());
 }
 
-/* 🔁 LOOP CORREGIDO */
+/* 🔁 LOOP */
 function loop(){
 
 if(!analyser || !audioContext){
@@ -179,7 +184,7 @@ return;
 
 let r = getRango();
 
-/* 🔥 SUAVIZADO */
+/* SUAVIZADO */
 historial.push(freq);
 if(historial.length > 5) historial.shift();
 
@@ -234,7 +239,7 @@ historial=[];
 render();
 }
 
-/* 💾 CRUD */
+/* CRUD */
 function guardarCancion(){
 
 let nombre=document.getElementById("nombreCancion").value.trim();
@@ -302,7 +307,7 @@ Notas: ${x.notas.join(" - ")}<br>
 
 mostrar();
 
-/* 📥 EXPORTAR */
+/* EXPORTAR */
 function descargar(){
 let data=getData();
 
@@ -315,7 +320,7 @@ a.download="canciones.json";
 a.click();
 }
 
-/* 📂 IMPORTAR */
+/* IMPORTAR */
 function importar(e){
 let file=e.target.files[0];
 let reader=new FileReader();
@@ -329,7 +334,7 @@ mostrar();
 reader.readAsText(file);
 }
 
-/* 🔬 DETECTOR */
+/* DETECTOR */
 function autoCorrelate(buf,sampleRate){
 let SIZE=buf.length;
 let rms=0;
