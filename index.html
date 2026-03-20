@@ -20,20 +20,20 @@
 }
 
 body{
-font-family:Arial;
-background:var(--bg);
-color:var(--txt);
-text-align:center;
-padding:15px
+  font-family:Arial;
+  background:var(--bg);
+  color:var(--txt);
+  text-align:center;
+  padding:15px
 }
 
 button{
-padding:10px;
-border-radius:10px;
-border:none;
-color:white;
-cursor:pointer;
-margin:5px
+  padding:10px;
+  border-radius:10px;
+  border:none;
+  color:white;
+  cursor:pointer;
+  margin:5px
 }
 
 .primary{background:var(--primary)}
@@ -41,33 +41,48 @@ margin:5px
 .ok{background:var(--ok)}
 
 select,input{
-padding:10px;
-border-radius:10px;
-margin-top:10px;
-border:none
+  padding:10px;
+  border-radius:10px;
+  margin-top:10px;
+  border:none
 }
 
 .panel{
-background:var(--panel);
-padding:15px;
-margin-top:15px;
-border-radius:12px;
-max-width:700px;
-margin:auto;
-text-align:left;
+  background:var(--panel);
+  padding:15px;
+  margin-top:15px;
+  border-radius:12px;
+  max-width:700px;
+  margin:auto;
+  text-align:left;
 }
 
 #notaActual{
-font-size:55px;
-color:#22c55e;
-text-align:center;
+  font-size:55px;
+  color:#22c55e;
+  text-align:center;
 }
 
 .item{
-background:#334155;
-padding:10px;
-border-radius:10px;
-margin-top:10px;
+  background:#334155;
+  padding:10px;
+  border-radius:10px;
+  margin-top:10px;
+}
+
+/* ===== NUEVO: VU metro sencillo ===== */
+#vuWrap{max-width:700px;margin:12px auto 0;padding:0 10px}
+#vuBar{
+  height:8px; width:100%; background:#1f2937; border-radius:999px; overflow:hidden;
+  border:1px solid #334155;
+}
+#vuFill{
+  height:100%; width:0%; background:linear-gradient(90deg,#16a34a,#22c55e);
+  transition:width .08s linear;
+}
+#testAudio{
+  font-size:13px; color:#cbd5e1; margin-top:8px;
+  text-align:center;
 }
 </style>
 </head>
@@ -80,42 +95,48 @@ margin-top:10px;
 <button class="danger" onclick="detener()">⛔ Detener</button>
 <button onclick="limpiar()">🧹 Limpiar</button>
 
+<!-- ===== NUEVO: VU + resultado de prueba ===== -->
+<div id="vuWrap">
+  <div id="vuBar"><div id="vuFill"></div></div>
+  <div id="testAudio">Micrófono inactivo.</div>
+</div>
+
 <h3>🎸 Instrumento</h3>
 <select id="instrumento">
-<option value="guitarra">Guitarra</option>
-<option value="bajo">Bajo</option>
-<option value="teclado">Teclado</option>
+  <option value="guitarra">Guitarra</option>
+  <option value="bajo">Bajo</option>
+  <option value="teclado">Teclado</option>
 </select>
 
 <div id="notaActual">—</div>
 
 <div class="panel">
-<h3>Notas detectadas</h3>
-<div id="chips"></div>
+  <h3>Notas detectadas</h3>
+  <div id="chips"></div>
 </div>
 
 <div class="panel">
-<h3>Análisis</h3>
-<div>Nota principal: <span id="notaPrincipal">—</span></div>
-<div>Acordes: <span id="acordes">—</span></div>
+  <h3>Análisis</h3>
+  <div>Nota principal: <span id="notaPrincipal">—</span></div>
+  <div>Acordes: <span id="acordes">—</span></div>
 </div>
 
 <div class="panel">
-<h3>💾 Guardar canción</h3>
+  <h3>💾 Guardar canción</h3>
 
-<input type="text" id="nombreCancion" placeholder="Nombre">
+  <input type="text" id="nombreCancion" placeholder="Nombre">
 
-<br>
+  <br>
 
-<button class="primary" onclick="guardarCancion()">Guardar</button>
-<button class="ok" onclick="descargar()">Descargar</button>
+  <button class="primary" onclick="guardarCancion()">Guardar</button>
+  <button class="ok" onclick="descargar()">Descargar</button>
 
-<input type="file" onchange="importar(event)">
+  <input type="file" onchange="importar(event)">
 </div>
 
 <div class="panel">
-<h3>🎵 Canciones</h3>
-<div id="lista"></div>
+  <h3>🎵 Canciones</h3>
+  <div id="lista"></div>
 </div>
 
 <script>
@@ -127,172 +148,222 @@ let historial=[];
 
 /* 🎸 RANGO */
 function getRango(){
-let i=document.getElementById("instrumento").value;
-if(i==="bajo") return {min:40,max:400};
-if(i==="teclado") return {min:30,max:2000};
-return {min:80,max:1000};
+  let i=document.getElementById("instrumento").value;
+  if(i==="bajo") return {min:40,max:400};
+  if(i==="teclado") return {min:30,max:2000};
+  return {min:80,max:1000};
+}
+
+/* ===== NUEVO: helpers de prueba/indicador ===== */
+function medirNivel(buf){
+  let rms=0;
+  for(let i=0;i<buf.length;i++) rms+=buf[i]*buf[i];
+  rms=Math.sqrt(rms/buf.length);
+  return rms; // 0..~1
+}
+function notaDesdeFrecuenciaSiPosible(freq){
+  if(!freq || freq<=0 || !isFinite(freq)) return null;
+  return frecuenciaANota(freq);
+}
+let __vuRAF=null;
+function tickVU(){
+  if(!analyser){ cancelAnimationFrame(__vuRAF); return; }
+  const b=new Float32Array(analyser.fftSize);
+  analyser.getFloatTimeDomainData(b);
+  const rms=medirNivel(b);
+  const pct=Math.min(100, Math.max(0, (rms*100*3))); // escalado simple
+  const fill=document.getElementById('vuFill');
+  if(fill) fill.style.width = pct.toFixed(1) + '%';
+  __vuRAF = requestAnimationFrame(tickVU);
+}
+function pruebaEscucha(){
+  if(!analyser || !audioContext){ 
+    document.getElementById('testAudio').textContent='Micrófono no disponible.';
+    return;
+  }
+  const buf=new Float32Array(analyser.fftSize);
+  analyser.getFloatTimeDomainData(buf);
+  const rms=medirNivel(buf);
+  const freq=autoCorrelate(buf, audioContext.sampleRate);
+  const nota=notaDesdeFrecuenciaSiPosible(freq);
+  const msg = (rms<0.02)
+    ? 'Prueba: silencio / muy bajo. Acércate al micrófono o sube volumen.'
+    : `Prueba: nivel ${(rms*100).toFixed(1)}% · ${isFinite(freq)&&freq>0 ? `≈ ${freq.toFixed(1)} Hz${nota?` (${nota})`:''}` : 'frecuencia no definida'}`;
+  document.getElementById('testAudio').textContent = msg;
 }
 
 /* 🎤 AUDIO */
 async function iniciar(){
 try{
 
-audioContext = new (window.AudioContext || window.webkitAudioContext)();
+  audioContext = new (window.AudioContext || window.webkitAudioContext)();
 
-if(audioContext.state === "suspended"){
-await audioContext.resume();
-}
+  if(audioContext.state === "suspended"){
+    await audioContext.resume();
+  }
 
-let stream = await navigator.mediaDevices.getUserMedia({audio:true});
+  let stream = await navigator.mediaDevices.getUserMedia({audio:true});
 
-analyser = audioContext.createAnalyser();
-analyser.fftSize = 2048;
+  analyser = audioContext.createAnalyser();
+  analyser.fftSize = 2048;
 
-let mic = audioContext.createMediaStreamSource(stream);
-mic.connect(analyser);
+  let mic = audioContext.createMediaStreamSource(stream);
+  mic.connect(analyser);
 
-micStream = stream;
+  micStream = stream;
 
-loop();
+  loop();
+
+  // ===== NUEVO: arrancar VU y mostrar prueba inmediata
+  tickVU();
+  setTimeout(pruebaEscucha, 150); // breve espera para llenar el buffer
 
 }catch(e){
-alert("Error micrófono: " + e.message);
+  alert("Error micrófono: " + e.message);
 }
 }
 
 function detener(){
-if(micStream) micStream.getTracks().forEach(t=>t.stop());
+  if(micStream) micStream.getTracks().forEach(t=>t.stop());
+  micStream = null;
+  analyser = null;
+  // limpiar VU y mensaje
+  cancelAnimationFrame(__vuRAF);
+  const fill=document.getElementById('vuFill');
+  if(fill) fill.style.width='0%';
+  const t=document.getElementById('testAudio');
+  if(t) t.textContent='Micrófono inactivo.';
 }
 
 /* 🔁 LOOP */
 function loop(){
 
-if(!analyser || !audioContext){
-requestAnimationFrame(loop);
-return;
-}
+  if(!analyser || !audioContext){
+    requestAnimationFrame(loop);
+    return;
+  }
 
-let buffer = new Float32Array(analyser.fftSize);
-analyser.getFloatTimeDomainData(buffer);
+  let buffer = new Float32Array(analyser.fftSize);
+  analyser.getFloatTimeDomainData(buffer);
 
-let freq = autoCorrelate(buffer, audioContext.sampleRate);
+  let freq = autoCorrelate(buffer, audioContext.sampleRate);
 
-if(freq === -1 || isNaN(freq)){
-requestAnimationFrame(loop);
-return;
-}
+  if(freq === -1 || isNaN(freq)){
+    requestAnimationFrame(loop);
+    return;
+  }
 
-let r = getRango();
+  let r = getRango();
 
-/* SUAVIZADO */
-historial.push(freq);
-if(historial.length > 5) historial.shift();
+  /* SUAVIZADO */
+  historial.push(freq);
+  if(historial.length > 5) historial.shift();
 
-let promedio = historial.reduce((a,b)=>a+b,0) / historial.length;
+  let promedio = historial.reduce((a,b)=>a+b,0) / historial.length;
 
-if(promedio > r.min && promedio < r.max){
+  if(promedio > r.min && promedio < r.max){
 
-let nota = frecuenciaANota(promedio);
+    let nota = frecuenciaANota(promedio);
 
-notasSet.add(nota);
-conteo[nota] = (conteo[nota] || 0) + 1;
+    notasSet.add(nota);
+    conteo[nota] = (conteo[nota] || 0) + 1;
 
-document.getElementById("notaActual").innerText = nota;
+    document.getElementById("notaActual").innerText = nota;
 
-render();
-}
+    render();
+  }
 
-requestAnimationFrame(loop);
+  requestAnimationFrame(loop);
 }
 
 /* 🎼 FRECUENCIA */
 function frecuenciaANota(f){
-let n = 12*Math.log2(f/440);
-let i = Math.round(n)+57;
-return PC[(i%12+12)%12];
+  let n = 12*Math.log2(f/440);
+  let i = Math.round(n)+57;
+  return PC[(i%12+12)%12];
 }
 
 /* UI */
 function render(){
 
-document.getElementById("chips").innerText=[...notasSet].join(" - ");
+  document.getElementById("chips").innerText=[...notasSet].join(" - ");
 
-let principal=null,max=0;
+  let principal=null,max=0;
 
-for(let n in conteo){
-if(conteo[n]>max){max=conteo[n];principal=n;}
-}
+  for(let n in conteo){
+    if(conteo[n]>max){max=conteo[n];principal=n;}
+  }
 
-document.getElementById("notaPrincipal").innerText=principal||"—";
+  document.getElementById("notaPrincipal").innerText=principal||"—";
 
-try{
-let acordes=Tonal.Chord.detect([...notasSet]);
-document.getElementById("acordes").innerText=acordes.join(", ");
-}catch{}
+  try{
+    let acordes=Tonal.Chord.detect([...notasSet]);
+    document.getElementById("acordes").innerText=acordes.join(", ");
+  }catch{}
 }
 
 /* LIMPIAR */
 function limpiar(){
-notasSet.clear();
-conteo={};
-historial=[];
-render();
+  notasSet.clear();
+  conteo={};
+  historial=[];
+  render();
 }
 
 /* CRUD */
 function guardarCancion(){
 
-let nombre=document.getElementById("nombreCancion").value.trim();
+  let nombre=document.getElementById("nombreCancion").value.trim();
 
-if(!nombre || notasSet.size===0) return;
+  if(!nombre || notasSet.size===0) return;
 
-let data=getData();
+  let data=getData();
 
-data.push({
-id:Date.now(),
-nombre,
-notas:[...notasSet],
-fecha:new Date().toLocaleString()
-});
+  data.push({
+    id:Date.now(),
+    nombre,
+    notas:[...notasSet],
+    fecha:new Date().toLocaleString()
+  });
 
-localStorage.setItem("songs",JSON.stringify(data));
+  localStorage.setItem("songs",JSON.stringify(data));
 
-mostrar();
+  mostrar();
 }
 
 function getData(){
-return JSON.parse(localStorage.getItem("songs"))||[];
+  return JSON.parse(localStorage.getItem("songs"))||[];
 }
 
 function eliminar(id){
-let data=getData().filter(x=>x.id!==id);
-localStorage.setItem("songs",JSON.stringify(data));
-mostrar();
+  let data=getData().filter(x=>x.id!==id);
+  localStorage.setItem("songs",JSON.stringify(data));
+  mostrar();
 }
 
 function editar(id){
-let data=getData();
-let item=data.find(x=>x.id===id);
+  let data=getData();
+  let item=data.find(x=>x.id===id);
 
-let nuevo=prompt("Nuevo nombre",item.nombre);
-if(!nuevo) return;
+  let nuevo=prompt("Nuevo nombre",item.nombre);
+  if(!nuevo) return;
 
-item.nombre=nuevo;
+  item.nombre=nuevo;
 
-localStorage.setItem("songs",JSON.stringify(data));
-mostrar();
+  localStorage.setItem("songs",JSON.stringify(data));
+  mostrar();
 }
 
 /* MOSTRAR */
 function mostrar(){
 
-let cont=document.getElementById("lista");
-let data=getData();
+  let cont=document.getElementById("lista");
+  let data=getData();
 
-cont.innerHTML="";
+  cont.innerHTML="";
 
-data.reverse().forEach(x=>{
-cont.innerHTML+=`
+  data.reverse().forEach(x=>{
+    cont.innerHTML+=`
 <div class="item">
 <strong>${x.nombre}</strong><br>
 Notas: ${x.notas.join(" - ")}<br>
@@ -302,61 +373,61 @@ Notas: ${x.notas.join(" - ")}<br>
 <button onclick="eliminar(${x.id})" class="danger">🗑️</button>
 </div>
 `;
-});
+  });
 }
 
 mostrar();
 
 /* EXPORTAR */
 function descargar(){
-let data=getData();
+  let data=getData();
 
-let blob=new Blob([JSON.stringify(data)],{type:"application/json"});
-let url=URL.createObjectURL(blob);
+  let blob=new Blob([JSON.stringify(data)],{type:"application/json"});
+  let url=URL.createObjectURL(blob);
 
-let a=document.createElement("a");
-a.href=url;
-a.download="canciones.json";
-a.click();
+  let a=document.createElement("a");
+  a.href=url;
+  a.download="canciones.json";
+  a.click();
 }
 
 /* IMPORTAR */
 function importar(e){
-let file=e.target.files[0];
-let reader=new FileReader();
+  let file=e.target.files[0];
+  let reader=new FileReader();
 
-reader.onload=function(){
-let data=JSON.parse(reader.result);
-localStorage.setItem("songs",JSON.stringify(data));
-mostrar();
-};
+  reader.onload=function(){
+    let data=JSON.parse(reader.result);
+    localStorage.setItem("songs",JSON.stringify(data));
+    mostrar();
+  };
 
-reader.readAsText(file);
+  reader.readAsText(file);
 }
 
 /* DETECTOR */
 function autoCorrelate(buf,sampleRate){
-let SIZE=buf.length;
-let rms=0;
+  let SIZE=buf.length;
+  let rms=0;
 
-for(let i=0;i<SIZE;i++) rms+=buf[i]*buf[i];
-rms=Math.sqrt(rms/SIZE);
+  for(let i=0;i<SIZE;i++) rms+=buf[i]*buf[i];
+  rms=Math.sqrt(rms/SIZE);
 
-if(rms<0.02) return -1;
+  if(rms<0.02) return -1;
 
-let best=0,pos=0;
+  let best=0,pos=0;
 
-for(let i=0;i<SIZE;i++){
-let sum=0;
-for(let j=0;j<SIZE-i;j++){
-sum+=buf[j]*buf[j+i];
-}
-if(sum>best){best=sum;pos=i;}
-}
+  for(let i=0;i<SIZE;i++){
+    let sum=0;
+    for(let j=0;j<SIZE-i;j++){
+      sum+=buf[j]*buf[j+i];
+    }
+    if(sum>best){best=sum;pos=i;}
+  }
 
-if(pos===0) return -1;
+  if(pos===0) return -1;
 
-return sampleRate/pos;
+  return sampleRate/pos;
 }
 </script>
 
