@@ -148,10 +148,10 @@ let historial=[];
 
 /* 🎸 RANGO */
 function getRango(){
-  let i=document.getElementById("instrumento").value;
+  const i=document.getElementById("instrumento").value;
   if(i==="bajo") return {min:40,max:400};
   if(i==="teclado") return {min:30,max:2000};
-  return {min:80,max:1000};
+  return {min:80,max:1000}; // guitarra
 }
 
 /* ===== NUEVO: helpers de prueba/indicador ===== */
@@ -184,7 +184,8 @@ function pruebaEscucha(){
   const buf=new Float32Array(analyser.fftSize);
   analyser.getFloatTimeDomainData(buf);
   const rms=medirNivel(buf);
-  const freq=autoCorrelate(buf, audioContext.sampleRate);
+  const r = getRango();
+  const freq=autoCorrelate(buf, audioContext.sampleRate, r.min, r.max);
   const nota=notaDesdeFrecuenciaSiPosible(freq);
   const msg = (rms<0.02)
     ? 'Prueba: silencio / muy bajo. Acércate al micrófono o sube volumen.'
@@ -194,33 +195,41 @@ function pruebaEscucha(){
 
 /* 🎤 AUDIO */
 async function iniciar(){
-try{
+  try{
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    if(audioContext.state === "suspended"){
+      await audioContext.resume();
+    }
 
-  audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    // === Solicitar audio sin procesado automático del SO
+    let stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false,
+        channelCount: 1,
+        sampleRate: { ideal: 48000 }
+      }
+    });
 
-  if(audioContext.state === "suspended"){
-    await audioContext.resume();
+    analyser = audioContext.createAnalyser();
+    analyser.fftSize = 4096;               // ventana más amplia
+    analyser.smoothingTimeConstant = 0;    // lectura cruda
+
+    let mic = audioContext.createMediaStreamSource(stream);
+    mic.connect(analyser);
+
+    micStream = stream;
+
+    loop();
+
+    // ===== NUEVO: arrancar VU y mostrar prueba inmediata
+    tickVU();
+    setTimeout(pruebaEscucha, 150); // breve espera para llenar el buffer
+
+  }catch(e){
+    alert("Error micrófono: " + e.message);
   }
-
-  let stream = await navigator.mediaDevices.getUserMedia({audio:true});
-
-  analyser = audioContext.createAnalyser();
-  analyser.fftSize = 2048;
-
-  let mic = audioContext.createMediaStreamSource(stream);
-  mic.connect(analyser);
-
-  micStream = stream;
-
-  loop();
-
-  // ===== NUEVO: arrancar VU y mostrar prueba inmediata
-  tickVU();
-  setTimeout(pruebaEscucha, 150); // breve espera para llenar el buffer
-
-}catch(e){
-  alert("Error micrófono: " + e.message);
-}
 }
 
 function detener(){
@@ -237,42 +246,39 @@ function detener(){
 
 /* 🔁 LOOP */
 function loop(){
-
   if(!analyser || !audioContext){
     requestAnimationFrame(loop);
     return;
   }
 
-  let buffer = new Float32Array(analyser.fftSize);
+  const buffer = new Float32Array(analyser.fftSize);
   analyser.getFloatTimeDomainData(buffer);
 
-  let freq = autoCorrelate(buffer, audioContext.sampleRate);
+  const r = getRango();
+  const freq = autoCorrelate(buffer, audioContext.sampleRate, r.min, r.max);
 
   if(freq === -1 || isNaN(freq)){
     requestAnimationFrame(loop);
     return;
   }
 
-  let r = getRango();
-
-  /* SUAVIZADO */
+  // SUAVIZADO
   historial.push(freq);
   if(historial.length > 5) historial.shift();
+  const promedio = historial.reduce((a,b)=>a+b,0) / historial.length;
 
-  let promedio = historial.reduce((a,b)=>a+b,0) / historial.length;
+  const nota = frecuenciaANota(promedio);
 
-  if(promedio > r.min && promedio < r.max){
+  notasSet.add(nota);
+  conteo[nota] = (conteo[nota] || 0) + 1;
 
-    let nota = frecuenciaANota(promedio);
+  document.getElementById("notaActual").innerText = nota;
 
-    notasSet.add(nota);
-    conteo[nota] = (conteo[nota] || 0) + 1;
+  // Mensaje de depuración útil
+  document.getElementById("testAudio").textContent =
+    `Nivel OK · ≈ ${promedio.toFixed(1)} Hz (${nota})`;
 
-    document.getElementById("notaActual").innerText = nota;
-
-    render();
-  }
-
+  render();
   requestAnimationFrame(loop);
 }
 
@@ -285,15 +291,12 @@ function frecuenciaANota(f){
 
 /* UI */
 function render(){
-
   document.getElementById("chips").innerText=[...notasSet].join(" - ");
 
   let principal=null,max=0;
-
   for(let n in conteo){
     if(conteo[n]>max){max=conteo[n];principal=n;}
   }
-
   document.getElementById("notaPrincipal").innerText=principal||"—";
 
   try{
@@ -307,18 +310,17 @@ function limpiar(){
   notasSet.clear();
   conteo={};
   historial=[];
+  document.getElementById("notaActual").innerText="—";
+  document.getElementById("testAudio").textContent='Micrófono inactivo.';
   render();
 }
 
 /* CRUD */
 function guardarCancion(){
-
   let nombre=document.getElementById("nombreCancion").value.trim();
-
   if(!nombre || notasSet.size===0) return;
 
   let data=getData();
-
   data.push({
     id:Date.now(),
     nombre,
@@ -327,7 +329,6 @@ function guardarCancion(){
   });
 
   localStorage.setItem("songs",JSON.stringify(data));
-
   mostrar();
 }
 
@@ -344,19 +345,15 @@ function eliminar(id){
 function editar(id){
   let data=getData();
   let item=data.find(x=>x.id===id);
-
   let nuevo=prompt("Nuevo nombre",item.nombre);
   if(!nuevo) return;
-
   item.nombre=nuevo;
-
   localStorage.setItem("songs",JSON.stringify(data));
   mostrar();
 }
 
 /* MOSTRAR */
 function mostrar(){
-
   let cont=document.getElementById("lista");
   let data=getData();
 
@@ -381,10 +378,8 @@ mostrar();
 /* EXPORTAR */
 function descargar(){
   let data=getData();
-
   let blob=new Blob([JSON.stringify(data)],{type:"application/json"});
   let url=URL.createObjectURL(blob);
-
   let a=document.createElement("a");
   a.href=url;
   a.download="canciones.json";
@@ -395,39 +390,73 @@ function descargar(){
 function importar(e){
   let file=e.target.files[0];
   let reader=new FileReader();
-
   reader.onload=function(){
     let data=JSON.parse(reader.result);
     localStorage.setItem("songs",JSON.stringify(data));
     mostrar();
   };
-
   reader.readAsText(file);
 }
 
-/* DETECTOR */
-function autoCorrelate(buf,sampleRate){
-  let SIZE=buf.length;
-  let rms=0;
+/* ====== NUEVO DETECTOR ROBUSTO (autocorrelación normalizada) ====== */
+function autoCorrelate(buf, sampleRate, minHz = 40, maxHz = 1200) {
+  const size = buf.length;
 
-  for(let i=0;i<SIZE;i++) rms+=buf[i]*buf[i];
-  rms=Math.sqrt(rms/SIZE);
+  // 1) Puerta por RMS
+  let rms = 0;
+  for (let i = 0; i < size; i++) rms += buf[i] * buf[i];
+  rms = Math.sqrt(rms / size);
+  if (rms < 0.01) return -1;
 
-  if(rms<0.02) return -1;
+  // 2) Quitar DC + ventana Hann
+  let mean = 0;
+  for (let i = 0; i < size; i++) mean += buf[i];
+  mean /= size;
 
-  let best=0,pos=0;
-
-  for(let i=0;i<SIZE;i++){
-    let sum=0;
-    for(let j=0;j<SIZE-i;j++){
-      sum+=buf[j]*buf[j+i];
-    }
-    if(sum>best){best=sum;pos=i;}
+  const w = 2 * Math.PI / (size - 1);
+  for (let i = 0; i < size; i++) {
+    const hann = 0.5 * (1 - Math.cos(w * i));
+    buf[i] = (buf[i] - mean) * hann;
   }
 
-  if(pos===0) return -1;
+  // 3) Lags acotados por rango de frecuencias
+  const maxLag = Math.floor(sampleRate / minHz);
+  const minLag = Math.max(2, Math.floor(sampleRate / maxHz));
+  const corr = new Float32Array(maxLag);
 
-  return sampleRate/pos;
+  // 4) Autocorrelación normalizada (NACF)
+  for (let lag = minLag; lag < maxLag; lag++) {
+    let sum = 0, sumx2 = 0, sumy2 = 0;
+    for (let i = 0; i < size - lag; i++) {
+      const x = buf[i];
+      const y = buf[i + lag];
+      sum   += x * y;
+      sumx2 += x * x;
+      sumy2 += y * y;
+    }
+    const denom = Math.sqrt(sumx2 * sumy2) + 1e-12;
+    corr[lag] = sum / denom;
+  }
+
+  // 5) Pico máximo y umbral de confianza
+  let bestLag = -1, bestVal = 0;
+  for (let lag = minLag; lag < maxLag; lag++) {
+    const v = corr[lag];
+    if (v > bestVal) { bestVal = v; bestLag = lag; }
+  }
+  if (bestLag === -1 || bestVal < 0.3) return -1;
+
+  // 6) Interpolación parabólica
+  const prev = corr[bestLag - 1] || corr[bestLag];
+  const next = corr[bestLag + 1] || corr[bestLag];
+  const denom = 2 * (2 * bestVal - prev - next);
+  let shift = 0;
+  if (Math.abs(denom) > 1e-12) {
+    shift = (next - prev) / denom;  // -1..1
+  }
+
+  const refinedLag = bestLag + shift;
+  return sampleRate / refinedLag;
 }
 </script>
 
