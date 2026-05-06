@@ -1,7 +1,6 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
   <title>Detector de Notas (Bajo)</title>
@@ -233,7 +232,6 @@
 <div class="footerBar">
   <div class="help">
     <b>Nota:</b> Esto detecta la <b>nota predominante</b> (ideal si tocas tú el bajo o si el bajo está claro en la mezcla).
-    ¿Quieres que también guarde <b>duraciones</b> por nota (tipo “partitura simple”)? Dímelo y lo agrego.
   </div>
 </div>
 
@@ -241,17 +239,18 @@
 /* =========================
    Utilidades: nota/frecuencia
 ========================= */
-const NOTE_NAMES = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+// Nombres en español (sostenidos)
+const NOTE_NAMES_ES = ["DO","DO#","RE","RE#","MI","FA","FA#","SOL","SOL#","LA","LA#","SI"];
 
-function freqToMidi(f){
-  return 69 + 12 * Math.log2(f / 440);
-}
 function midiToName(m){
   const n = Math.round(m);
-  const name = NOTE_NAMES[(n % 12 + 12) % 12];
+  const name = NOTE_NAMES_ES[(n % 12 + 12) % 12];
   const octave = Math.floor(n / 12) - 1;
+
+  // Si NO quieres mostrar octava, usa: return name;
   return name + octave;
 }
+
 function centsOff(f, midi){
   const exact = 440 * Math.pow(2, (midi - 69) / 12);
   return 1200 * Math.log2(f / exact);
