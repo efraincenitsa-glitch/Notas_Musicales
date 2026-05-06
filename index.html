@@ -1,464 +1,774 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
+  <title>Detector de Notas (Bajo)</title>
 
-<title>Detector IA PRO EXPERTO</title>
-
-<!-- ICONO 1024 -->
-<link rel="icon" href="icono.png">
-<link rel="icon" type="image/png" sizes="1024x1024" href="icono.png">
-<link rel="apple-touch-icon" href="icono.png">
-
-<script src="https://unpkg.com/@tonaljs/tonal"></script>
-
-<style>
-:root{
-  --bg:#0f172a; --panel:#1e293b; --txt:#e2e8f0;
-  --primary:#2563eb; --danger:#ef4444; --ok:#22c55e;
-}
-
-body{
-  font-family:Arial;
-  background:var(--bg);
-  color:var(--txt);
-  text-align:center;
-  padding:15px
-}
-
-button{
-  padding:10px;
-  border-radius:10px;
-  border:none;
-  color:white;
-  cursor:pointer;
-  margin:5px
-}
-
-.primary{background:var(--primary)}
-.danger{background:var(--danger)}
-.ok{background:var(--ok)}
-
-select,input{
-  padding:10px;
-  border-radius:10px;
-  margin-top:10px;
-  border:none
-}
-
-.panel{
-  background:var(--panel);
-  padding:15px;
-  margin-top:15px;
-  border-radius:12px;
-  max-width:700px;
-  margin:auto;
-  text-align:left;
-}
-
-#notaActual{
-  font-size:55px;
-  color:#22c55e;
-  text-align:center;
-}
-
-.item{
-  background:#334155;
-  padding:10px;
-  border-radius:10px;
-  margin-top:10px;
-}
-
-/* ===== NUEVO: VU metro sencillo ===== */
-#vuWrap{max-width:700px;margin:12px auto 0;padding:0 10px}
-#vuBar{
-  height:8px; width:100%; background:#1f2937; border-radius:999px; overflow:hidden;
-  border:1px solid #334155;
-}
-#vuFill{
-  height:100%; width:0%; background:linear-gradient(90deg,#16a34a,#22c55e);
-  transition:width .08s linear;
-}
-#testAudio{
-  font-size:13px; color:#cbd5e1; margin-top:8px;
-  text-align:center;
-}
-</style>
+  <!-- ICONO 1024 -->
+  <link rel="icon" href="icono.png">
+  <link rel="icon" type="image/png" sizes="1024x1024" href="icono.png">
+  <link rel="apple-touch-icon" href="icono.png">
+  <style>
+    :root{
+      --bg:#0b1220; --card:#111a2e; --muted:#9fb0d0; --text:#eaf0ff;
+      --accent:#6ae4ff; --ok:#37d67a; --warn:#ffcc66; --bad:#ff5d6c;
+      --border: rgba(255,255,255,.08);
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      background: linear-gradient(180deg,#070b16, #0b1220 55%, #070b16);
+      color:var(--text);
+    }
+    header{
+      padding:18px 16px 10px;
+      position:sticky; top:0; backdrop-filter: blur(10px);
+      background: rgba(11,18,32,.72);
+      border-bottom:1px solid var(--border);
+      z-index:10;
+    }
+    h1{margin:0; font-size:18px; letter-spacing:.2px}
+    .sub{margin-top:4px; color:var(--muted); font-size:12px}
+    main{padding:14px 14px 90px; max-width:860px; margin:0 auto}
+    .grid{display:grid; gap:12px}
+    @media(min-width:760px){ .grid{grid-template-columns: 1.1fr .9fr} }
+    .card{
+      background: rgba(17,26,46,.92);
+      border:1px solid var(--border);
+      border-radius:18px;
+      padding:14px;
+      box-shadow: 0 10px 30px rgba(0,0,0,.25);
+    }
+    .row{display:flex; gap:10px; flex-wrap:wrap; align-items:center}
+    button, input, select{
+      border-radius:14px; border:1px solid var(--border);
+      padding:10px 12px; background: rgba(255,255,255,.04); color: var(--text);
+      outline:none;
+    }
+    button{
+      cursor:pointer; font-weight:600;
+      transition: transform .06s ease, background .2s ease, border .2s ease;
+    }
+    button:active{transform: scale(.98)}
+    button.primary{background: rgba(106,228,255,.14); border-color: rgba(106,228,255,.35)}
+    button.danger{background: rgba(255,93,108,.14); border-color: rgba(255,93,108,.35)}
+    button.ghost{background: rgba(255,255,255,.03)}
+    input[type="range"]{padding:0; height:36px}
+    .kpi{
+      display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px;
+    }
+    .kpi > div{
+      border:1px solid var(--border); border-radius:16px; padding:10px;
+      background: rgba(255,255,255,.02);
+    }
+    .label{color:var(--muted); font-size:12px}
+    .value{font-size:20px; margin-top:2px; font-weight:800}
+    .bigNote{
+      font-size:48px; font-weight:900; letter-spacing:.6px; line-height:1.05;
+    }
+    .badge{
+      padding:4px 10px; border-radius:999px; border:1px solid var(--border);
+      font-size:12px; color:var(--muted);
+      display:inline-flex; gap:6px; align-items:center;
+    }
+    .dot{width:8px;height:8px;border-radius:50%}
+    .dot.ok{background:var(--ok)}
+    .dot.warn{background:var(--warn)}
+    .dot.bad{background:var(--bad)}
+    .mono{font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace}
+    .list{
+      max-height:260px; overflow:auto; padding-right:4px;
+    }
+    .item{
+      border:1px solid var(--border); border-radius:14px; padding:10px;
+      margin:8px 0; background: rgba(255,255,255,.02);
+    }
+    .item h3{margin:0; font-size:14px}
+    .item .meta{margin-top:4px; font-size:12px; color:var(--muted); display:flex; gap:10px; flex-wrap:wrap}
+    .pill{
+      display:inline-block; padding:5px 10px; border-radius:999px;
+      border:1px solid var(--border); background: rgba(255,255,255,.02);
+      margin:4px 6px 0 0; font-size:12px;
+    }
+    .footerBar{
+      position:fixed; left:0; right:0; bottom:0;
+      padding:12px 14px;
+      background: rgba(11,18,32,.82);
+      border-top:1px solid var(--border);
+      backdrop-filter: blur(10px);
+    }
+    a{color:var(--accent)}
+    .help{color:var(--muted); font-size:12px; line-height:1.45}
+    .sep{height:1px;background:var(--border); margin:12px 0}
+  </style>
 </head>
 
 <body>
+<header>
+  <h1>🎸 Detector de Notas para Bajo (Safari iPhone)</h1>
+  <div class="sub">Escucha por micrófono o archivo • Detecta nota predominante (monofónica) • Guarda por canción</div>
+</header>
 
-<h2>🎼 Detector IA PRO EXPERTO</h2>
+<main class="grid">
+  <!-- Panel izquierdo: detección -->
+  <section class="card">
+    <div class="row" style="justify-content:space-between">
+      <div>
+        <div class="label">Estado</div>
+        <div id="status" class="badge"><span class="dot warn"></span> Listo</div>
+      </div>
+      <div class="row">
+        <button id="btnMic" class="primary">🎤 Iniciar micrófono</button>
+        <button id="btnStop" class="danger" disabled>⏹ Detener</button>
+      </div>
+    </div>
 
-<button class="primary" onclick="iniciar()">🎤 Activar</button>
-<button class="danger" onclick="detener()">⛔ Detener</button>
-<button onclick="limpiar()">🧹 Limpiar</button>
+    <div class="sep"></div>
 
-<!-- ===== NUEVO: VU + resultado de prueba ===== -->
-<div id="vuWrap">
-  <div id="vuBar"><div id="vuFill"></div></div>
-  <div id="testAudio">Micrófono inactivo.</div>
-</div>
+    <div class="row">
+      <label class="badge" title="O puedes cargar un archivo de audio">
+        🎧 Archivo: <input id="fileAudio" type="file" accept="audio/*" />
+      </label>
+      <button id="btnPlayFile" class="ghost" disabled>▶️ Reproducir archivo</button>
+      <button id="btnStopFile" class="ghost" disabled>⏸ Pausar</button>
+    </div>
 
-<h3>🎸 Instrumento</h3>
-<select id="instrumento">
-  <option value="guitarra">Guitarra</option>
-  <option value="bajo">Bajo</option>
-  <option value="teclado">Teclado</option>
-</select>
+    <div class="sep"></div>
 
-<div id="notaActual">—</div>
+    <div class="kpi">
+      <div>
+        <div class="label">Nota detectada</div>
+        <div id="noteName" class="bigNote">—</div>
+        <div id="tuning" class="label mono">—</div>
+      </div>
+      <div>
+        <div class="label">Frecuencia (Hz)</div>
+        <div id="freq" class="value mono">—</div>
+        <div class="label">Confianza</div>
+        <div id="conf" class="value mono">—</div>
+      </div>
+      <div>
+        <div class="label">Volumen</div>
+        <div id="rms" class="value mono">—</div>
+        <div class="label">Tiempo</div>
+        <div id="time" class="value mono">—</div>
+      </div>
+    </div>
 
-<div class="panel">
-  <h3>Notas detectadas</h3>
-  <div id="chips"></div>
-</div>
+    <div class="sep"></div>
 
-<div class="panel">
-  <h3>Análisis</h3>
-  <div>Nota principal: <span id="notaPrincipal">—</span></div>
-  <div>Acordes: <span id="acordes">—</span></div>
-</div>
+    <div class="row">
+      <label class="badge">Umbral volumen
+        <input id="thr" type="range" min="0.005" max="0.08" step="0.001" value="0.02" />
+        <span id="thrVal" class="mono">0.020</span>
+      </label>
 
-<div class="panel">
-  <h3>💾 Guardar canción</h3>
+      <label class="badge">Estabilidad (frames)
+        <input id="stableFrames" type="range" min="2" max="12" step="1" value="6" />
+        <span id="stableVal" class="mono">6</span>
+      </label>
 
-  <input type="text" id="nombreCancion" placeholder="Nombre">
+      <button id="btnClear" class="ghost">🧹 Limpiar sesión</button>
+    </div>
 
-  <br>
+    <p class="help">
+      ✅ Tips: Para detectar mejor el bajo, sube graves en el EQ, baja agudos, y si puedes aislar el bajo (track separado o versión karaoke), mejor.
+      En mezcla completa, el detector se queda con la <b>frecuencia dominante</b> y puede saltar entre instrumentos.
+    </p>
 
-  <button class="primary" onclick="guardarCancion()">Guardar</button>
-  <button class="ok" onclick="descargar()">Descargar</button>
+    <div class="sep"></div>
 
-  <input type="file" onchange="importar(event)">
-</div>
+    <div class="row" style="justify-content:space-between; align-items:flex-start">
+      <div style="flex:1; min-width:250px">
+        <div class="label">Historial (últimos 120 eventos)</div>
+        <div id="history" class="list"></div>
+      </div>
+      <div style="flex:1; min-width:250px">
+        <div class="label">Resumen de notas (conteo)</div>
+        <div id="summary"></div>
+      </div>
+    </div>
+  </section>
 
-<div class="panel">
-  <h3>🎵 Canciones</h3>
-  <div id="lista"></div>
+  <!-- Panel derecho: guardado -->
+  <aside class="card">
+    <h2 style="margin:0 0 8px; font-size:16px">💾 Guardar por canción</h2>
+
+    <div class="row">
+      <input id="songName" type="text" placeholder="Nombre de la canción (ej. Hysteria - Muse)" style="flex:1; min-width:240px" />
+      <button id="btnSaveSong" class="primary">Guardar</button>
+    </div>
+
+    <p class="help">
+      Se guarda en tu iPhone usando <span class="mono">localStorage</span> (no necesitas internet).
+      Puedes exportar tus canciones a un archivo JSON para respaldo.
+    </p>
+
+    <div class="row">
+      <button id="btnExport" class="ghost">⬇️ Exportar JSON</button>
+      <button id="btnImport" class="ghost">⬆️ Importar JSON</button>
+      <input id="importFile" type="file" accept="application/json" style="display:none" />
+    </div>
+
+    <div class="sep"></div>
+
+    <div class="row" style="justify-content:space-between">
+      <div class="label">Canciones guardadas</div>
+      <button id="btnClearAll" class="danger">Borrar todo</button>
+    </div>
+
+    <div id="savedSongs" class="list" style="max-height:420px"></div>
+
+    <div class="sep"></div>
+    <p class="help">
+      📌 Para usar como “app”:
+      abre este archivo en Safari y luego <b>Compartir → Añadir a pantalla de inicio</b>.
+      Si lo hospedas en HTTPS (GitHub Pages), el micrófono funciona perfecto.
+    </p>
+  </aside>
+</main>
+
+<div class="footerBar">
+  <div class="help">
+    <b>Nota:</b> Esto detecta la <b>nota predominante</b> (ideal si tocas tú el bajo o si el bajo está claro en la mezcla).
+    ¿Quieres que también guarde <b>duraciones</b> por nota (tipo “partitura simple”)? Dímelo y lo agrego.
+  </div>
 </div>
 
 <script>
-const PC=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+/* =========================
+   Utilidades: nota/frecuencia
+========================= */
+const NOTE_NAMES = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
 
-let audioContext, analyser, micStream;
-let notasSet=new Set(), conteo={};
-let historial=[];
-
-/* 🎸 RANGO */
-function getRango(){
-  const i=document.getElementById("instrumento").value;
-  if(i==="bajo") return {min:40,max:400};
-  if(i==="teclado") return {min:30,max:2000};
-  return {min:80,max:1000}; // guitarra
+function freqToMidi(f){
+  return 69 + 12 * Math.log2(f / 440);
+}
+function midiToName(m){
+  const n = Math.round(m);
+  const name = NOTE_NAMES[(n % 12 + 12) % 12];
+  const octave = Math.floor(n / 12) - 1;
+  return name + octave;
+}
+function centsOff(f, midi){
+  const exact = 440 * Math.pow(2, (midi - 69) / 12);
+  return 1200 * Math.log2(f / exact);
 }
 
-/* ===== NUEVO: helpers de prueba/indicador ===== */
-function medirNivel(buf){
-  let rms=0;
-  for(let i=0;i<buf.length;i++) rms+=buf[i]*buf[i];
-  rms=Math.sqrt(rms/buf.length);
-  return rms; // 0..~1
-}
-function notaDesdeFrecuenciaSiPosible(freq){
-  if(!freq || freq<=0 || !isFinite(freq)) return null;
-  return frecuenciaANota(freq);
-}
-let __vuRAF=null;
-function tickVU(){
-  if(!analyser){ cancelAnimationFrame(__vuRAF); return; }
-  const b=new Float32Array(analyser.fftSize);
-  analyser.getFloatTimeDomainData(b);
-  const rms=medirNivel(b);
-  const pct=Math.min(100, Math.max(0, (rms*100*3))); // escalado simple
-  const fill=document.getElementById('vuFill');
-  if(fill) fill.style.width = pct.toFixed(1) + '%';
-  __vuRAF = requestAnimationFrame(tickVU);
-}
-function pruebaEscucha(){
-  if(!analyser || !audioContext){ 
-    document.getElementById('testAudio').textContent='Micrófono no disponible.';
-    return;
-  }
-  const buf=new Float32Array(analyser.fftSize);
-  analyser.getFloatTimeDomainData(buf);
-  const rms=medirNivel(buf);
-  const r = getRango();
-  const freq=autoCorrelate(buf, audioContext.sampleRate, r.min, r.max);
-  const nota=notaDesdeFrecuenciaSiPosible(freq);
-  const msg = (rms<0.02)
-    ? 'Prueba: silencio / muy bajo. Acércate al micrófono o sube volumen.'
-    : `Prueba: nivel ${(rms*100).toFixed(1)}% · ${isFinite(freq)&&freq>0 ? `≈ ${freq.toFixed(1)} Hz${nota?` (${nota})`:''}` : 'frecuencia no definida'}`;
-  document.getElementById('testAudio').textContent = msg;
-}
+function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
 
-/* 🎤 AUDIO */
-async function iniciar(){
-  try{
-    audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    if(audioContext.state === "suspended"){
-      await audioContext.resume();
-    }
-
-    // === Solicitar audio sin procesado automático del SO
-    let stream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        echoCancellation: false,
-        noiseSuppression: false,
-        autoGainControl: false,
-        channelCount: 1,
-        sampleRate: { ideal: 48000 }
-      }
-    });
-
-    analyser = audioContext.createAnalyser();
-    analyser.fftSize = 4096;               // ventana más amplia
-    analyser.smoothingTimeConstant = 0;    // lectura cruda
-
-    let mic = audioContext.createMediaStreamSource(stream);
-    mic.connect(analyser);
-
-    micStream = stream;
-
-    loop();
-
-    // ===== NUEVO: arrancar VU y mostrar prueba inmediata
-    tickVU();
-    setTimeout(pruebaEscucha, 150); // breve espera para llenar el buffer
-
-  }catch(e){
-    alert("Error micrófono: " + e.message);
-  }
-}
-
-function detener(){
-  if(micStream) micStream.getTracks().forEach(t=>t.stop());
-  micStream = null;
-  analyser = null;
-  // limpiar VU y mensaje
-  cancelAnimationFrame(__vuRAF);
-  const fill=document.getElementById('vuFill');
-  if(fill) fill.style.width='0%';
-  const t=document.getElementById('testAudio');
-  if(t) t.textContent='Micrófono inactivo.';
-}
-
-/* 🔁 LOOP */
-function loop(){
-  if(!analyser || !audioContext){
-    requestAnimationFrame(loop);
-    return;
-  }
-
-  const buffer = new Float32Array(analyser.fftSize);
-  analyser.getFloatTimeDomainData(buffer);
-
-  const r = getRango();
-  const freq = autoCorrelate(buffer, audioContext.sampleRate, r.min, r.max);
-
-  if(freq === -1 || isNaN(freq)){
-    requestAnimationFrame(loop);
-    return;
-  }
-
-  // SUAVIZADO
-  historial.push(freq);
-  if(historial.length > 5) historial.shift();
-  const promedio = historial.reduce((a,b)=>a+b,0) / historial.length;
-
-  const nota = frecuenciaANota(promedio);
-
-  notasSet.add(nota);
-  conteo[nota] = (conteo[nota] || 0) + 1;
-
-  document.getElementById("notaActual").innerText = nota;
-
-  // Mensaje de depuración útil
-  document.getElementById("testAudio").textContent =
-    `Nivel OK · ≈ ${promedio.toFixed(1)} Hz (${nota})`;
-
-  render();
-  requestAnimationFrame(loop);
-}
-
-/* 🎼 FRECUENCIA */
-function frecuenciaANota(f){
-  let n = 12*Math.log2(f/440);
-  let i = Math.round(n)+57;
-  return PC[(i%12+12)%12];
-}
-
-/* UI */
-function render(){
-  document.getElementById("chips").innerText=[...notasSet].join(" - ");
-
-  let principal=null,max=0;
-  for(let n in conteo){
-    if(conteo[n]>max){max=conteo[n];principal=n;}
-  }
-  document.getElementById("notaPrincipal").innerText=principal||"—";
-
-  try{
-    let acordes=Tonal.Chord.detect([...notasSet]);
-    document.getElementById("acordes").innerText=acordes.join(", ");
-  }catch{}
-}
-
-/* LIMPIAR */
-function limpiar(){
-  notasSet.clear();
-  conteo={};
-  historial=[];
-  document.getElementById("notaActual").innerText="—";
-  document.getElementById("testAudio").textContent='Micrófono inactivo.';
-  render();
-}
-
-/* CRUD */
-function guardarCancion(){
-  let nombre=document.getElementById("nombreCancion").value.trim();
-  if(!nombre || notasSet.size===0) return;
-
-  let data=getData();
-  data.push({
-    id:Date.now(),
-    nombre,
-    notas:[...notasSet],
-    fecha:new Date().toLocaleString()
-  });
-
-  localStorage.setItem("songs",JSON.stringify(data));
-  mostrar();
-}
-
-function getData(){
-  return JSON.parse(localStorage.getItem("songs"))||[];
-}
-
-function eliminar(id){
-  let data=getData().filter(x=>x.id!==id);
-  localStorage.setItem("songs",JSON.stringify(data));
-  mostrar();
-}
-
-function editar(id){
-  let data=getData();
-  let item=data.find(x=>x.id===id);
-  let nuevo=prompt("Nuevo nombre",item.nombre);
-  if(!nuevo) return;
-  item.nombre=nuevo;
-  localStorage.setItem("songs",JSON.stringify(data));
-  mostrar();
-}
-
-/* MOSTRAR */
-function mostrar(){
-  let cont=document.getElementById("lista");
-  let data=getData();
-
-  cont.innerHTML="";
-
-  data.reverse().forEach(x=>{
-    cont.innerHTML+=`
-<div class="item">
-<strong>${x.nombre}</strong><br>
-Notas: ${x.notas.join(" - ")}<br>
-<small>${x.fecha}</small><br>
-
-<button onclick="editar(${x.id})">✏️</button>
-<button onclick="eliminar(${x.id})" class="danger">🗑️</button>
-</div>
-`;
-  });
-}
-
-mostrar();
-
-/* EXPORTAR */
-function descargar(){
-  let data=getData();
-  let blob=new Blob([JSON.stringify(data)],{type:"application/json"});
-  let url=URL.createObjectURL(blob);
-  let a=document.createElement("a");
-  a.href=url;
-  a.download="canciones.json";
-  a.click();
-}
-
-/* IMPORTAR */
-function importar(e){
-  let file=e.target.files[0];
-  let reader=new FileReader();
-  reader.onload=function(){
-    let data=JSON.parse(reader.result);
-    localStorage.setItem("songs",JSON.stringify(data));
-    mostrar();
-  };
-  reader.readAsText(file);
-}
-
-/* ====== NUEVO DETECTOR ROBUSTO (autocorrelación normalizada) ====== */
-function autoCorrelate(buf, sampleRate, minHz = 40, maxHz = 1200) {
-  const size = buf.length;
-
-  // 1) Puerta por RMS
+/* =========================
+   Pitch detection (autocorrelation)
+   - Sencilla y sin librerías
+   - Funciona mejor con señales monofónicas
+========================= */
+function autoCorrelate(buf, sampleRate){
+  // Calcula RMS para estimar "volumen"
   let rms = 0;
-  for (let i = 0; i < size; i++) rms += buf[i] * buf[i];
-  rms = Math.sqrt(rms / size);
-  if (rms < 0.01) return -1;
+  for (let i=0;i<buf.length;i++){
+    const v = buf[i];
+    rms += v*v;
+  }
+  rms = Math.sqrt(rms / buf.length);
 
-  // 2) Quitar DC + ventana Hann
+  // Si volumen muy bajo, no hay nota confiable
+  if (rms < 0.005) return {freq: null, conf: 0, rms};
+
+  // Autocorrelación
+  const SIZE = buf.length;
+  const MAX_SAMPLES = Math.floor(SIZE/2);
+  let bestOffset = -1;
+  let bestCorr = 0;
+  let lastCorr = 1;
+  let found = false;
+
+  // Normalización básica: quitar DC offset
   let mean = 0;
-  for (let i = 0; i < size; i++) mean += buf[i];
-  mean /= size;
+  for (let i=0;i<SIZE;i++) mean += buf[i];
+  mean /= SIZE;
 
-  const w = 2 * Math.PI / (size - 1);
-  for (let i = 0; i < size; i++) {
-    const hann = 0.5 * (1 - Math.cos(w * i));
-    buf[i] = (buf[i] - mean) * hann;
-  }
+  const norm = new Float32Array(SIZE);
+  for (let i=0;i<SIZE;i++) norm[i] = buf[i] - mean;
 
-  // 3) Lags acotados por rango de frecuencias
-  const maxLag = Math.floor(sampleRate / minHz);
-  const minLag = Math.max(2, Math.floor(sampleRate / maxHz));
-  const corr = new Float32Array(maxLag);
-
-  // 4) Autocorrelación normalizada (NACF)
-  for (let lag = minLag; lag < maxLag; lag++) {
-    let sum = 0, sumx2 = 0, sumy2 = 0;
-    for (let i = 0; i < size - lag; i++) {
-      const x = buf[i];
-      const y = buf[i + lag];
-      sum   += x * y;
-      sumx2 += x * x;
-      sumy2 += y * y;
+  for (let offset = 8; offset < MAX_SAMPLES; offset++){
+    let corr = 0;
+    for (let i=0; i<MAX_SAMPLES; i++){
+      corr += norm[i] * norm[i+offset];
     }
-    const denom = Math.sqrt(sumx2 * sumy2) + 1e-12;
-    corr[lag] = sum / denom;
+    corr = corr / MAX_SAMPLES;
+
+    if (corr > 0.9 && corr > lastCorr) found = true;
+    if (found && corr > bestCorr){
+      bestCorr = corr;
+      bestOffset = offset;
+    }
+    else if (found && corr < bestCorr * 0.98){
+      // Hemos pasado el pico principal
+      break;
+    }
+    lastCorr = corr;
   }
 
-  // 5) Pico máximo y umbral de confianza
-  let bestLag = -1, bestVal = 0;
-  for (let lag = minLag; lag < maxLag; lag++) {
-    const v = corr[lag];
-    if (v > bestVal) { bestVal = v; bestLag = lag; }
-  }
-  if (bestLag === -1 || bestVal < 0.3) return -1;
+  if (bestOffset === -1) return {freq: null, conf: 0, rms};
 
-  // 6) Interpolación parabólica
-  const prev = corr[bestLag - 1] || corr[bestLag];
-  const next = corr[bestLag + 1] || corr[bestLag];
-  const denom = 2 * (2 * bestVal - prev - next);
-  let shift = 0;
-  if (Math.abs(denom) > 1e-12) {
-    shift = (next - prev) / denom;  // -1..1
-  }
-
-  const refinedLag = bestLag + shift;
-  return sampleRate / refinedLag;
+  const freq = sampleRate / bestOffset;
+  const conf = clamp(bestCorr, 0, 1);
+  return {freq, conf, rms};
 }
-</script>
 
+/* =========================
+   Estado global
+========================= */
+let audioCtx = null;
+let analyser = null;
+let sourceNode = null;
+let stream = null;
+
+let rafId = null;
+let startTs = null;
+
+let lastStable = { name: null, midi: null, freq: null };
+let stableCount = 0;
+
+let history = []; // [{t, note, freq, conf}]
+let noteCounts = {}; // { "E2": 12, ... }
+
+let fileAudioEl = null;
+let fileSource = null;
+
+/* =========================
+   UI
+========================= */
+const $ = (sel)=>document.querySelector(sel);
+const statusEl = $("#status");
+const noteNameEl = $("#noteName");
+const tuningEl = $("#tuning");
+const freqEl = $("#freq");
+const confEl = $("#conf");
+const rmsEl = $("#rms");
+const timeEl = $("#time");
+const thrEl = $("#thr");
+const thrValEl = $("#thrVal");
+const stableFramesEl = $("#stableFrames");
+const stableValEl = $("#stableVal");
+const historyEl = $("#history");
+const summaryEl = $("#summary");
+
+function setStatus(text, level="warn"){
+  const dotClass = level === "ok" ? "ok" : (level === "bad" ? "bad" : "warn");
+  statusEl.innerHTML = `<span class="dot ${dotClass}"></span> ${text}`;
+}
+
+function fmt(n, d=2){
+  if (n === null || n === undefined || Number.isNaN(n)) return "—";
+  return Number(n).toFixed(d);
+}
+
+function renderHistory(){
+  const last = history.slice(-120).reverse();
+  historyEl.innerHTML = last.map(h => `
+    <div class="item">
+      <div class="row" style="justify-content:space-between">
+        <h3>${h.note}</h3>
+        <span class="badge mono">${fmt(h.t,2)}s</span>
+      </div>
+      <div class="meta">
+        <span class="mono">f: ${fmt(h.freq,1)} Hz</span>
+        <span class="mono">conf: ${fmt(h.conf,2)}</span>
+      </div>
+    </div>
+  `).join("") || `<div class="help">Aún no hay eventos. Inicia micrófono o reproduce un archivo.</div>`;
+}
+
+function renderSummary(){
+  const entries = Object.entries(noteCounts)
+    .sort((a,b)=>b[1]-a[1])
+    .slice(0, 36);
+
+  summaryEl.innerHTML = entries.map(([k,v]) =>
+    `<span class="pill"><b>${k}</b> × ${v}</span>`
+  ).join("") || `<div class="help">Se mostrará el conteo de notas detectadas.</div>`;
+}
+
+/* =========================
+   Guardado en localStorage
+========================= */
+const STORE_KEY = "bassNotesSongs_v1";
+
+function loadSongs(){
+  try{
+    const raw = localStorage.getItem(STORE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  }catch(e){
+    return [];
+  }
+}
+function saveSongs(arr){
+  localStorage.setItem(STORE_KEY, JSON.stringify(arr));
+}
+function uid(){
+  return Math.random().toString(16).slice(2) + Date.now().toString(16);
+}
+
+function renderSavedSongs(){
+  const songs = loadSongs().sort((a,b)=> (b.createdAt||0)-(a.createdAt||0));
+  const box = $("#savedSongs");
+  if (!songs.length){
+    box.innerHTML = `<div class="help">No hay canciones guardadas aún.</div>`;
+    return;
+  }
+  box.innerHTML = songs.map(s=>{
+    const notes = Object.entries(s.noteCounts||{})
+      .sort((a,b)=>b[1]-a[1])
+      .slice(0, 18)
+      .map(([k,v])=>`<span class="pill"><b>${k}</b> × ${v}</span>`).join("");
+    const date = new Date(s.createdAt||Date.now()).toLocaleString();
+    return `
+      <div class="item">
+        <div class="row" style="justify-content:space-between">
+          <h3>${escapeHtml(s.name||"Sin nombre")}</h3>
+          <span class="badge mono">${date}</span>
+        </div>
+        <div class="meta">
+          <span class="mono">Eventos: ${(s.history||[]).length}</span>
+          <span class="mono">Notas únicas: ${Object.keys(s.noteCounts||{}).length}</span>
+        </div>
+        <div style="margin-top:8px">${notes || `<span class="help">Sin notas.</span>`}</div>
+        <div class="row" style="margin-top:10px">
+          <button class="ghost" onclick="viewSong('${s.id}')">Ver</button>
+          <button class="ghost" onclick="downloadSong('${s.id}')">Descargar</button>
+          <button class="danger" onclick="deleteSong('${s.id}')">Borrar</button>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+function escapeHtml(str){
+  return String(str).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+window.viewSong = function(id){
+  const songs = loadSongs();
+  const s = songs.find(x=>x.id===id);
+  if(!s) return;
+  // Cargar a sesión actual (sin iniciar audio)
+  history = (s.history||[]).slice();
+  noteCounts = Object.assign({}, s.noteCounts||{});
+  renderHistory();
+  renderSummary();
+  $("#songName").value = s.name || "";
+  alert("Cargado a la sesión actual. Puedes seguir escuchando y luego volver a guardar.");
+}
+
+window.downloadSong = function(id){
+  const songs = loadSongs();
+  const s = songs.find(x=>x.id===id);
+  if(!s) return;
+  const blob = new Blob([JSON.stringify(s,null,2)], {type:"application/json"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = (s.name||"cancion").replace(/[^\w\-]+/g,"_") + ".json";
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 500);
+}
+
+window.deleteSong = function(id){
+  if(!confirm("¿Borrar esta canción?")) return;
+  const songs = loadSongs().filter(x=>x.id!==id);
+  saveSongs(songs);
+  renderSavedSongs();
+}
+
+/* =========================
+   Motor de audio
+========================= */
+async function ensureAudio(){
+  if (audioCtx) return;
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  analyser = audioCtx.createAnalyser();
+  analyser.fftSize = 2048;
+  analyser.smoothingTimeConstant = 0.2;
+}
+
+function stopLoop(){
+  if (rafId){
+    cancelAnimationFrame(rafId);
+    rafId = null;
+  }
+}
+
+function cleanupSource(){
+  if (sourceNode){
+    try{ sourceNode.disconnect(); }catch(e){}
+    sourceNode = null;
+  }
+}
+
+async function startMic(){
+  await ensureAudio();
+  if (audioCtx.state === "suspended") await audioCtx.resume();
+
+  // getUserMedia requiere HTTPS o localhost
+  stream = await navigator.mediaDevices.getUserMedia({
+    audio: {
+      echoCancellation: false,
+      noiseSuppression: false,
+      autoGainControl: false
+    }
+  });
+
+  cleanupSource();
+  sourceNode = audioCtx.createMediaStreamSource(stream);
+  sourceNode.connect(analyser);
+
+  startTs = performance.now();
+  setStatus("Escuchando micrófono", "ok");
+  $("#btnStop").disabled = false;
+  $("#btnMic").disabled = true;
+
+  loopDetect();
+}
+
+function stopMic(){
+  stopLoop();
+  if (stream){
+    stream.getTracks().forEach(t=>t.stop());
+    stream = null;
+  }
+  cleanupSource();
+  setStatus("Detenido", "warn");
+  $("#btnStop").disabled = true;
+  $("#btnMic").disabled = false;
+}
+
+function attachFileAudio(file){
+  if (!file) return;
+  if (fileAudioEl){
+    fileAudioEl.pause();
+    fileAudioEl = null;
+  }
+  fileAudioEl = new Audio();
+  fileAudioEl.src = URL.createObjectURL(file);
+  fileAudioEl.crossOrigin = "anonymous";
+  fileAudioEl.preload = "auto";
+  fileAudioEl.loop = false;
+
+  $("#btnPlayFile").disabled = false;
+  $("#btnStopFile").disabled = false;
+
+  fileAudioEl.onended = ()=> {
+    setStatus("Archivo finalizó", "warn");
+    stopLoop();
+  };
+}
+
+async function playFile(){
+  if (!fileAudioEl) return;
+  await ensureAudio();
+  if (audioCtx.state === "suspended") await audioCtx.resume();
+
+  cleanupSource();
+  if (fileSource){
+    try{ fileSource.disconnect(); }catch(e){}
+    fileSource = null;
+  }
+
+  fileSource = audioCtx.createMediaElementSource(fileAudioEl);
+  fileSource.connect(analyser);
+  analyser.connect(audioCtx.destination); // para escuchar
+
+  await fileAudioEl.play();
+  startTs = performance.now();
+  setStatus("Reproduciendo archivo", "ok");
+  loopDetect();
+}
+
+function pauseFile(){
+  if (fileAudioEl) fileAudioEl.pause();
+  setStatus("Archivo pausado", "warn");
+  stopLoop();
+}
+
+/* =========================
+   Loop de detección
+========================= */
+function loopDetect(){
+  const buf = new Float32Array(analyser.fftSize);
+  const thr = parseFloat(thrEl.value);
+  const stableNeeded = parseInt(stableFramesEl.value, 10);
+
+  analyser.getFloatTimeDomainData(buf);
+  const {freq, conf, rms} = autoCorrelate(buf, audioCtx.sampleRate);
+
+  const t = (performance.now() - startTs) / 1000;
+
+  rmsEl.textContent = fmt(rms, 3);
+  timeEl.textContent = fmt(t, 2);
+
+  if (freq && rms >= thr && conf >= 0.6 && freq >= 35 && freq <= 400){
+    const midi = freqToMidi(freq);
+    const name = midiToName(midi);
+    const cents = centsOff(freq, Math.round(midi));
+    noteNameEl.textContent = name;
+    freqEl.textContent = fmt(freq, 1);
+    confEl.textContent = fmt(conf, 2);
+
+    const c = Math.round(cents);
+    const abs = Math.abs(c);
+    const tuneLabel =
+      abs <= 10 ? "Afinado ✅" :
+      abs <= 25 ? "Cerca ⚠️" : "Desviado ❌";
+
+    tuningEl.textContent = `${c>0?"+":""}${c} cents • ${tuneLabel}`;
+
+    // Estabilidad: sólo registrar cuando se mantiene igual varias lecturas
+    if (lastStable.name === name){
+      stableCount++;
+    } else {
+      stableCount = 1;
+      lastStable = { name, midi: Math.round(midi), freq };
+    }
+
+    if (stableCount === stableNeeded){
+      // Registrar evento estable
+      history.push({t, note:name, freq, conf});
+      if (history.length > 1000) history.shift();
+
+      noteCounts[name] = (noteCounts[name] || 0) + 1;
+
+      renderHistory();
+      renderSummary();
+    }
+
+  } else {
+    // Sin señal confiable
+    noteNameEl.textContent = "—";
+    freqEl.textContent = "—";
+    confEl.textContent = "—";
+    tuningEl.textContent = "—";
+    stableCount = 0;
+  }
+
+  rafId = requestAnimationFrame(loopDetect);
+}
+
+/* =========================
+   Eventos UI
+========================= */
+thrEl.addEventListener("input", ()=> thrValEl.textContent = Number(thrEl.value).toFixed(3));
+stableFramesEl.addEventListener("input", ()=> stableValEl.textContent = stableFramesEl.value);
+
+$("#btnMic").addEventListener("click", async ()=>{
+  try{
+    if (!navigator.mediaDevices?.getUserMedia){
+      alert("Tu navegador no soporta micrófono (getUserMedia). Prueba Safari actualizado.");
+      return;
+    }
+    await startMic();
+  }catch(e){
+    console.error(e);
+    setStatus("Error con micrófono", "bad");
+    alert("No se pudo iniciar el micrófono. Asegúrate de permitir acceso y usar HTTPS.");
+  }
+});
+
+$("#btnStop").addEventListener("click", ()=> stopMic());
+
+$("#fileAudio").addEventListener("change", (ev)=>{
+  const f = ev.target.files?.[0];
+  attachFileAudio(f);
+});
+
+$("#btnPlayFile").addEventListener("click", async ()=>{
+  try{
+    await playFile();
+  }catch(e){
+    console.error(e);
+    setStatus("Error al reproducir", "bad");
+    alert("No se pudo reproducir el archivo. Intenta otro formato o vuelve a cargarlo.");
+  }
+});
+
+$("#btnStopFile").addEventListener("click", ()=> pauseFile());
+
+$("#btnClear").addEventListener("click", ()=>{
+  if(!confirm("¿Limpiar la sesión actual (historial y conteo)?")) return;
+  history = [];
+  noteCounts = {};
+  lastStable = { name:null, midi:null, freq:null };
+  stableCount = 0;
+  renderHistory();
+  renderSummary();
+});
+
+$("#btnSaveSong").addEventListener("click", ()=>{
+  const name = $("#songName").value.trim();
+  if (!name){
+    alert("Escribe el nombre de la canción.");
+    return;
+  }
+  if (!history.length){
+    alert("Aún no hay notas detectadas para guardar.");
+    return;
+  }
+  const songs = loadSongs();
+  const obj = {
+    id: uid(),
+    name,
+    createdAt: Date.now(),
+    history: history.slice(),
+    noteCounts: Object.assign({}, noteCounts)
+  };
+  songs.push(obj);
+  saveSongs(songs);
+  renderSavedSongs();
+  alert("✅ Canción guardada.");
+});
+
+$("#btnClearAll").addEventListener("click", ()=>{
+  if(!confirm("¿Borrar TODAS las canciones guardadas?")) return;
+  localStorage.removeItem(STORE_KEY);
+  renderSavedSongs();
+});
+
+$("#btnExport").addEventListener("click", ()=>{
+  const songs = loadSongs();
+  const blob = new Blob([JSON.stringify(songs,null,2)], {type:"application/json"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "mis_canciones_bajo.json";
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 500);
+});
+
+$("#btnImport").addEventListener("click", ()=> $("#importFile").click());
+
+$("#importFile").addEventListener("change", async (ev)=>{
+  const f = ev.target.files?.[0];
+  if(!f) return;
+  try{
+    const text = await f.text();
+    const data = JSON.parse(text);
+    if(!Array.isArray(data)) throw new Error("Formato inválido");
+    saveSongs(data);
+    renderSavedSongs();
+    alert("✅ Importación completa.");
+  }catch(e){
+    console.error(e);
+    alert("No se pudo importar. Verifica que sea un JSON válido exportado por esta app.");
+  }finally{
+    ev.target.value = "";
+  }
+});
+
+renderHistory();
+renderSummary();
+renderSavedSongs();
+</script>
 </body>
 </html>
