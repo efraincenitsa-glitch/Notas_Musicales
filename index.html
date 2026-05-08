@@ -236,6 +236,7 @@
 </div>
 
 <script>
+
 /* =========================
    Utilidades: nota/frecuencia
 ========================= */
@@ -251,12 +252,20 @@ function midiToName(m){
   return name + octave;
 }
 
+// ✅ ESTA FUNCIÓN FALTABA (OBLIGATORIA)
+function freqToMidi(f){
+  return 69 + 12 * Math.log2(f / 440);
+}
+
 function centsOff(f, midi){
   const exact = 440 * Math.pow(2, (midi - 69) / 12);
   return 1200 * Math.log2(f / exact);
 }
 
-function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
+function clamp(v, min, max){
+  return Math.max(min, Math.min(max, v));
+}
+
 
 /* =========================
    Pitch detection (autocorrelation)
@@ -298,7 +307,7 @@ function autoCorrelate(buf, sampleRate){
     }
     corr = corr / MAX_SAMPLES;
 
-    if (corr > 0.9 && corr > lastCorr) found = true;
+    if (corr > 0.6 && corr > lastCorr) found = true;
     if (found && corr > bestCorr){
       bestCorr = corr;
       bestOffset = offset;
@@ -475,6 +484,9 @@ window.downloadSong = function(id){
   setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 500);
 }
 
+
+
+
 window.deleteSong = function(id){
   if(!confirm("¿Borrar esta canción?")) return;
   const songs = loadSongs().filter(x=>x.id!==id);
@@ -608,7 +620,7 @@ function loopDetect(){
   rmsEl.textContent = fmt(rms, 3);
   timeEl.textContent = fmt(t, 2);
 
-  if (freq && rms >= thr && conf >= 0.6 && freq >= 35 && freq <= 400){
+  if (freq && rms >= thr && conf >= 0.45 && freq >= 35 && freq <= 400){
     const midi = freqToMidi(freq);
     const name = midiToName(midi);
     const cents = centsOff(freq, Math.round(midi));
