@@ -160,8 +160,10 @@
 
     <div class="row">
       <label class="badge">Umbral volumen
-        <input id="thr" type="range" min="0.005" max="0.08" step="0.001" value="0.02" />
-        <span id="thrVal" class="mono">0.020</span>
+       
+      <input id="thr" type="range" min="0.001" max="0.05" step="0.001" value="0.010" />
+      <span id="thrVal" class="mono">0.010</span>
+
       </label>
 
       <label class="badge">Estabilidad (frames)
@@ -281,12 +283,18 @@ function autoCorrelate(buf, sampleRate){
   }
   rms = Math.sqrt(rms / buf.length);
 
-  // Si volumen muy bajo, no hay nota confiable
-  if (rms < 0.005) return {freq: null, conf: 0, rms};
+
+// Si volumen muy bajo, no hay nota confiable (más tolerante en iPhone)
+if (rms < 0.002) return {freq: null, conf: 0, rms};
+
 
   // Autocorrelación
   const SIZE = buf.length;
   const MAX_SAMPLES = Math.floor(SIZE/2);
+  // ✅ Limitar offsets a rango típico de bajo (30–520 Hz)
+const minFreq = 30, maxFreq = 520;
+const minOffset = Math.floor(sampleRate / maxFreq);
+const maxOffset = Math.min(MAX_SAMPLES, Math.floor(sampleRate / minFreq));
   let bestOffset = -1;
   let bestCorr = 0;
   let lastCorr = 1;
@@ -300,24 +308,28 @@ function autoCorrelate(buf, sampleRate){
   const norm = new Float32Array(SIZE);
   for (let i=0;i<SIZE;i++) norm[i] = buf[i] - mean;
 
-  for (let offset = 8; offset < MAX_SAMPLES; offset++){
-    let corr = 0;
-    for (let i=0; i<MAX_SAMPLES; i++){
-      corr += norm[i] * norm[i+offset];
-    }
-    corr = corr / MAX_SAMPLES;
+for (let offset = Math.max(8, minOffset); offset < maxOffset; offset++){
+  let corr = 0;
 
-    if (corr > 0.6 && corr > lastCorr) found = true;
-    if (found && corr > bestCorr){
-      bestCorr = corr;
-      bestOffset = offset;
-    }
-    else if (found && corr < bestCorr * 0.98){
-      // Hemos pasado el pico principal
-      break;
-    }
-    lastCorr = corr;
+  for (let i = 0; i < MAX_SAMPLES; i++){
+    corr += norm[i] * norm[i + offset];
   }
+
+  corr = corr / MAX_SAMPLES;
+
+  if (corr > 0.45 && corr > lastCorr) found = true;
+
+  if (found && corr > bestCorr){
+    bestCorr = corr;
+    bestOffset = offset;
+  }
+  else if (found && corr < bestCorr * 0.98){
+    // Hemos pasado el pico principal
+    break;
+  }
+
+  lastCorr = corr;
+}
 
   if (bestOffset === -1) return {freq: null, conf: 0, rms};
 
@@ -501,8 +513,10 @@ async function ensureAudio(){
   if (audioCtx) return;
   audioCtx = new (window.AudioContext || window.webkitAudioContext)();
   analyser = audioCtx.createAnalyser();
-  analyser.fftSize = 2048;
-  analyser.smoothingTimeConstant = 0.2;
+
+analyser.fftSize = 4096;              // más resolución para graves
+analyser.smoothingTimeConstant = 0.15; // un poco menos de suavizado
+
 }
 
 function stopLoop(){
@@ -537,11 +551,14 @@ async function startMic(){
   sourceNode.connect(analyser);
 
   startTs = performance.now();
+
   setStatus("Escuchando micrófono", "ok");
   $("#btnStop").disabled = false;
   $("#btnMic").disabled = true;
 
+  stopLoop();   // ✅ evita loops duplicados
   loopDetect();
+
 }
 
 function stopMic(){
@@ -554,6 +571,12 @@ function stopMic(){
   setStatus("Detenido", "warn");
   $("#btnStop").disabled = true;
   $("#btnMic").disabled = false;
+
+  
+  // ✅ ahorro de batería / evita estados raros en iPhone
+  if (audioCtx && audioCtx.state === "running") {
+    audioCtx.suspend().catch(()=>{});
+  }
 }
 
 function attachFileAudio(file){
@@ -592,16 +615,28 @@ async function playFile(){
   fileSource.connect(analyser);
   analyser.connect(audioCtx.destination); // para escuchar
 
+
   await fileAudioEl.play();
   startTs = performance.now();
   setStatus("Reproduciendo archivo", "ok");
+
+  stopLoop();   // ✅ evita loops duplicados
   loopDetect();
+
 }
 
 function pauseFile(){
   if (fileAudioEl) fileAudioEl.pause();
-  setStatus("Archivo pausado", "warn");
   stopLoop();
+
+  // ✅ Limpia conexiones de audio (mejor en Safari iOS)
+  if (fileSource){
+    try{ fileSource.disconnect(); }catch(e){}
+    fileSource = null;
+  }
+  try{ analyser.disconnect(); }catch(e){} // desconecta salida a bocina si estaba conectada
+
+  setStatus("Archivo pausado", "warn");
 }
 
 /* =========================
@@ -620,13 +655,16 @@ function loopDetect(){
   rmsEl.textContent = fmt(rms, 3);
   timeEl.textContent = fmt(t, 2);
 
-  if (freq && rms >= thr && conf >= 0.45 && freq >= 35 && freq <= 400){
+  if (freq && rms >= thr && conf >= 0.30 && freq >= 30 && freq <= 520){
     const midi = freqToMidi(freq);
     const name = midiToName(midi);
     const cents = centsOff(freq, Math.round(midi));
     noteNameEl.textContent = name;
     freqEl.textContent = fmt(freq, 1);
     confEl.textContent = fmt(conf, 2);
+
+    // ✅ Estado OK cuando hay detección válida
+setStatus(`Detectando: ${name} • ${fmt(freq,1)} Hz • conf ${fmt(conf,2)}`, "ok");
 
     const c = Math.round(cents);
     const abs = Math.abs(c);
@@ -655,14 +693,25 @@ function loopDetect(){
       renderSummary();
     }
 
+} else {
+  noteNameEl.textContent = "—";
+  freqEl.textContent = "—";
+  confEl.textContent = "—";
+  tuningEl.textContent = "—";
+  stableCount = 0;
+
+  // 🔎 Debug (útil para ajustar)
+  if (rms < thr) {
+    setStatus(`Volumen bajo (rms ${fmt(rms,3)} < thr ${fmt(thr,3)})`, "warn");
+  } else if (conf < 0.30) {
+    setStatus(`Confianza baja (${fmt(conf,2)})`, "warn");
+  } else if (freq && (freq < 30 || freq > 520)) {
+    setStatus(`Fuera de rango (${fmt(freq,1)} Hz)`, "warn");
   } else {
-    // Sin señal confiable
-    noteNameEl.textContent = "—";
-    freqEl.textContent = "—";
-    confEl.textContent = "—";
-    tuningEl.textContent = "—";
-    stableCount = 0;
+    setStatus("Buscando nota…", "warn");
   }
+}
+
 
   rafId = requestAnimationFrame(loopDetect);
 }
@@ -777,9 +826,34 @@ $("#importFile").addEventListener("change", async (ev)=>{
   }
 });
 
+// ✅ iPhone/Safari: al ir a segundo plano, pausamos loop y suspendemos audio.
+// ✅ Al volver a la app, reanudamos el AudioContext.
+document.addEventListener("visibilitychange", async () => {
+  if (document.hidden) {
+    stopLoop();
+    if (audioCtx && audioCtx.state === "running") {
+      await audioCtx.suspend().catch(()=>{});
+    }
+    setStatus("En pausa (app en segundo plano)", "warn");
+  } else {
+    // ✅ al volver a la app, reanuda el audio
+    if (audioCtx && audioCtx.state === "suspended") {
+      await audioCtx.resume().catch(()=>{});
+    }
+    setStatus("Listo", "warn");
+  }
+});
+
+
+// ✅ Inicializa valores visibles de sliders
+thrValEl.textContent = Number(thrEl.value).toFixed(3);
+stableValEl.textContent = stableFramesEl.value;
+
 renderHistory();
 renderSummary();
 renderSavedSongs();
+
+
 </script>
 </body>
 </html>
