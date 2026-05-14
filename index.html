@@ -161,7 +161,7 @@
     <div class="row">
       <label class="badge">Umbral volumen
        
-      <input id="thr" type="range" min="0.001" max="0.05" step="0.001" value="0.010" />
+      <input id="thr" type="range" min="0.001" max="0.05" step="0.001" value="0.005" />
       <span id="thrVal" class="mono">0.010</span>
 
       </label>
@@ -274,67 +274,70 @@ function clamp(v, min, max){
    - Sencilla y sin librerías
    - Funciona mejor con señales monofónicas
 ========================= */
+
 function autoCorrelate(buf, sampleRate){
-  // Calcula RMS para estimar "volumen"
+  // 1) RMS (volumen)
   let rms = 0;
-  for (let i=0;i<buf.length;i++){
+  for (let i = 0; i < buf.length; i++){
     const v = buf[i];
     rms += v*v;
   }
   rms = Math.sqrt(rms / buf.length);
 
+  // Si casi no hay señal, no hay pitch confiable
+  if (rms < 0.0015) return {freq: null, conf: 0, rms};
 
-// Si volumen muy bajo, no hay nota confiable (más tolerante en iPhone)
-if (rms < 0.002) return {freq: null, conf: 0, rms};
-
-
-  // Autocorrelación
+  // 2) Quitar DC offset
   const SIZE = buf.length;
-  const MAX_SAMPLES = Math.floor(SIZE/2);
-  // ✅ Limitar offsets a rango típico de bajo (30–520 Hz)
-const minFreq = 30, maxFreq = 520;
-const minOffset = Math.floor(sampleRate / maxFreq);
-const maxOffset = Math.min(MAX_SAMPLES, Math.floor(sampleRate / minFreq));
-  let bestOffset = -1;
-  let bestCorr = 0;
-  let lastCorr = 1;
-  let found = false;
-
-  // Normalización básica: quitar DC offset
   let mean = 0;
   for (let i=0;i<SIZE;i++) mean += buf[i];
   mean /= SIZE;
 
-  const norm = new Float32Array(SIZE);
-  for (let i=0;i<SIZE;i++) norm[i] = buf[i] - mean;
+  const x = new Float32Array(SIZE);
+  for (let i=0;i<SIZE;i++) x[i] = buf[i] - mean;
 
-for (let offset = Math.max(8, minOffset); offset < maxOffset; offset++){
-  let corr = 0;
+  // 3) Rango típico de bajo
+  const minFreq = 30, maxFreq = 520;
+  const minLag = Math.floor(sampleRate / maxFreq);
+  const maxLag = Math.min(Math.floor(SIZE/2), Math.floor(sampleRate / minFreq));
 
-  for (let i = 0; i < MAX_SAMPLES; i++){
-    corr += norm[i] * norm[i + offset];
+  // 4) Autocorrelación NORMALIZADA por energía (más estable)
+  let bestLag = -1;
+  let bestCorr = 0;
+
+for (let lag = minLag; lag <= maxLag; lag++){
+  let sum = 0;
+  let sumSq1 = 0;
+  let sumSq2 = 0;
+
+  // ✅ evita out-of-range: i + lag siempre < SIZE
+  const limit = SIZE - lag;
+
+  for (let i = 0; i < limit; i++){
+    const a = x[i];
+    const b = x[i + lag];
+    sum += a * b;
+    sumSq1 += a * a;
+    sumSq2 += b * b;
   }
 
-  corr = corr / MAX_SAMPLES;
+  const denom = Math.sqrt(sumSq1 * sumSq2) || 1e-12;
+  const corr = sum / denom; // -1..1
 
-  if (corr > 0.45 && corr > lastCorr) found = true;
-
-  if (found && corr > bestCorr){
+  if (corr > bestCorr){
     bestCorr = corr;
-    bestOffset = offset;
+    bestLag = lag;
   }
-  else if (found && corr < bestCorr * 0.98){
-    // Hemos pasado el pico principal
-    break;
-  }
-
-  lastCorr = corr;
 }
 
-  if (bestOffset === -1) return {freq: null, conf: 0, rms};
+  if (bestLag === -1) return {freq: null, conf: 0, rms};
 
-  const freq = sampleRate / bestOffset;
+  // 5) Confianza: en música mezclada bajamos exigencia
   const conf = clamp(bestCorr, 0, 1);
+
+  // 6) Frecuencia estimada
+  const freq = sampleRate / bestLag;
+
   return {freq, conf, rms};
 }
 
@@ -357,6 +360,10 @@ let noteCounts = {}; // { "E2": 12, ... }
 
 let fileAudioEl = null;
 let fileSource = null;
+
+let hp = null; // high-pass
+let lp = null; // low-pass
+let comp = null; // compressor opcional
 
 /* =========================
    UI
@@ -517,7 +524,25 @@ async function ensureAudio(){
 analyser.fftSize = 4096;              // más resolución para graves
 analyser.smoothingTimeConstant = 0.15; // un poco menos de suavizado
 
+
+// ✅ PUNTO 2: Filtros para aislar bajo en mezcla completa (archivo)
+  hp = audioCtx.createBiquadFilter();
+  hp.type = "highpass";
+  hp.frequency.value = 30;   // corta sub-ruido/subgrave
+
+  lp = audioCtx.createBiquadFilter();
+  lp.type = "lowpass";
+  lp.frequency.value = 250;  // deja principalmente el bajo
+
+  // ✅ Compresor suave (opcional, ayuda en canciones)
+  comp = audioCtx.createDynamicsCompressor();
+  comp.threshold.value = -28;
+  comp.knee.value = 18;
+  comp.ratio.value = 3;
+  comp.attack.value = 0.003;
+  comp.release.value = 0.25;
 }
+
 
 function stopLoop(){
   if (rafId){
@@ -586,6 +611,7 @@ function attachFileAudio(file){
     fileAudioEl = null;
   }
   fileAudioEl = new Audio();
+  fileSource = null;
   fileAudioEl.src = URL.createObjectURL(file);
   fileAudioEl.crossOrigin = "anonymous";
   fileAudioEl.preload = "auto";
@@ -611,9 +637,26 @@ async function playFile(){
     fileSource = null;
   }
 
+// ✅ Safari/iOS: solo crear MediaElementSource UNA VEZ por elemento de audio
+if (!fileSource) {
   fileSource = audioCtx.createMediaElementSource(fileAudioEl);
-  fileSource.connect(analyser);
-  analyser.connect(audioCtx.destination); // para escuchar
+} else {
+  try { fileSource.disconnect(); } catch(e) {}
+}
+
+// ✅ cadena: fuente → HP → LP → Comp → Analyser
+try { hp.disconnect(); } catch(e) {}
+try { lp.disconnect(); } catch(e) {}
+try { comp.disconnect(); } catch(e) {}
+
+fileSource.connect(hp);
+hp.connect(lp);
+lp.connect(comp);
+comp.connect(analyser);
+
+// ✅ para escuchar (con el mismo filtrado)
+try{ analyser.disconnect(); }catch(e){}
+analyser.connect(audioCtx.destination);
 
 
   await fileAudioEl.play();
@@ -655,7 +698,7 @@ function loopDetect(){
   rmsEl.textContent = fmt(rms, 3);
   timeEl.textContent = fmt(t, 2);
 
-  if (freq && rms >= thr && conf >= 0.30 && freq >= 30 && freq <= 520){
+  if (freq && rms >= thr && conf >= 0.15 && freq >= 30 && freq <= 520){
     const midi = freqToMidi(freq);
     const name = midiToName(midi);
     const cents = centsOff(freq, Math.round(midi));
@@ -703,7 +746,7 @@ setStatus(`Detectando: ${name} • ${fmt(freq,1)} Hz • conf ${fmt(conf,2)}`, "
   // 🔎 Debug (útil para ajustar)
   if (rms < thr) {
     setStatus(`Volumen bajo (rms ${fmt(rms,3)} < thr ${fmt(thr,3)})`, "warn");
-  } else if (conf < 0.30) {
+  } } else if (conf < 0.15) {
     setStatus(`Confianza baja (${fmt(conf,2)})`, "warn");
   } else if (freq && (freq < 30 || freq > 520)) {
     setStatus(`Fuera de rango (${fmt(freq,1)} Hz)`, "warn");
